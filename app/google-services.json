@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "183169329812",
+    "project_id": "naporders-23cd3",
+    "storage_bucket": "naporders-23cd3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:183169329812:android:1b6ffe23d6da7d7e286281",
+        "android_client_info": {
+          "package_name": "com.example.snaporders"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjBUEPNvO4vsfPBdB9wA3-U8udpllIRXk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
