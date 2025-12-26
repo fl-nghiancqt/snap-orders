@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.feature.cart.CartScreen
 import com.example.snaporder.feature.menu.MenuScreen
+import com.example.snaporder.feature.order.OrderResultScreen
 
 /**
  * Main navigation graph for SnapOrder app.
@@ -83,9 +84,19 @@ fun SnapOrderNavGraph(
             )
         }
         
-        // User Order screen
+        // User Order Result screen
         composable(NavRoutes.USER_ORDER) {
-            PlaceholderScreen(title = "Order", description = "View order confirmation and status")
+            OrderResultScreen(
+                onBackToMenuClick = {
+                    navController.navigate(NavRoutes.USER_MENU) {
+                        popUpTo(NavRoutes.USER_MENU) { inclusive = false }
+                    }
+                },
+                onViewOrderDetailClick = {
+                    // TODO: Navigate to order detail screen
+                    // For now, just show a toast or navigate to history
+                }
+            )
         }
         
         // User History screen
