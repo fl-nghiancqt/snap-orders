@@ -21,5 +21,14 @@ interface OrderHistoryRepository {
      * @return List of orders for the current user
      */
     suspend fun getOrdersByUser(): List<Order>
+    
+    /**
+     * Get a single order by ID.
+     * In a real implementation, this would fetch from Firestore.
+     * 
+     * @param orderId The ID of the order to retrieve
+     * @return Order if found, null otherwise
+     */
+    suspend fun getOrderById(orderId: String): Order?
 }
 

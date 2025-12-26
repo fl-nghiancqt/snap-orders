@@ -18,10 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.feature.cart.CartScreen
 import com.example.snaporder.feature.history.OrderHistoryScreen
 import com.example.snaporder.feature.menu.MenuScreen
+import com.example.snaporder.feature.order.OrderDetailScreen
 import com.example.snaporder.feature.order.OrderResultScreen
 
 /**
@@ -97,8 +100,10 @@ fun SnapOrderNavGraph(
                     }
                 },
                 onViewOrderDetailClick = {
-                    // TODO: Navigate to order detail screen
-                    // For now, just show a toast or navigate to history
+                    // Navigate to order detail screen
+                    // Note: In a real app, we'd pass the orderId from the order result
+                    // For now, navigate to history where user can select an order
+                    navController.navigate(NavRoutes.USER_HISTORY)
                 }
             )
         }
@@ -110,8 +115,25 @@ fun SnapOrderNavGraph(
                     navController.popBackStack()
                 },
                 onOrderClick = { orderId ->
-                    // TODO: Navigate to order detail screen
-                    // For now, can navigate to order result with orderId
+                    navController.navigate(NavRoutes.userOrderDetail(orderId))
+                }
+            )
+        }
+        
+        // User Order Detail screen
+        composable(
+            route = NavRoutes.USER_ORDER_DETAIL,
+            arguments = listOf(
+                navArgument("orderId") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+            OrderDetailScreen(
+                orderId = orderId,
+                onBackClick = {
+                    navController.popBackStack()
                 }
             )
         }

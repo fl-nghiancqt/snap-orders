@@ -136,5 +136,55 @@ class FakeOrderHistoryRepository @Inject constructor() : OrderHistoryRepository 
             )
         )
     }
+    
+    override suspend fun getOrderById(orderId: String): Order? {
+        delay(500) // Simulate network delay
+        
+        // Return the order matching the ID, or create a sample order for ORD-003
+        val allOrders = getOrdersByUser()
+        val foundOrder = allOrders.find { it.id == orderId }
+        
+        if (foundOrder != null) {
+            return foundOrder
+        }
+        
+        // If not found, return sample order for ORD-003 (as per requirements)
+        if (orderId == "ORD-003") {
+            val calendar = Calendar.getInstance()
+            calendar.add(Calendar.MINUTE, -30)
+            val todayRecentTimestamp = Timestamp(calendar.timeInMillis / 1000, 0)
+            
+            return Order(
+                id = "ORD-003",
+                tableNumber = 8,
+                status = OrderStatus.PREPARING,
+                items = listOf(
+                    OrderItem(
+                        menuItemId = "1",
+                        menuItemName = "Trà đào",
+                        price = 30000.0,
+                        quantity = 2
+                    ),
+                    OrderItem(
+                        menuItemId = "5",
+                        menuItemName = "Trà sữa matcha",
+                        price = 40000.0,
+                        quantity = 1
+                    ),
+                    OrderItem(
+                        menuItemId = "3",
+                        menuItemName = "Cà phê sữa",
+                        price = 25000.0,
+                        quantity = 2
+                    )
+                ),
+                totalPrice = 160000.0, // 150,000 + 10,000 service fee
+                createdAt = todayRecentTimestamp,
+                userId = "user_123"
+            )
+        }
+        
+        return null
+    }
 }
 
