@@ -1,5 +1,7 @@
 package com.example.snaporder.core.di
 
+import com.example.snaporder.core.data.CartRepository
+import com.example.snaporder.core.data.FakeCartRepository
 import com.example.snaporder.core.data.FakeMenuRepository
 import com.example.snaporder.core.data.MenuDataSource
 import com.example.snaporder.core.firestore.FirestoreProvider
@@ -61,6 +63,19 @@ object AppModule {
     @Singleton
     fun provideOrderBusinessLogic(orderRepository: OrderRepository): OrderBusinessLogic {
         return OrderBusinessLogic(orderRepository)
+    }
+    
+    /**
+     * Provides CartRepository for UI development.
+     * Currently returns FakeCartRepository.
+     * 
+     * TODO: Replace with FirestoreCartRepository when ready:
+     * return FirestoreCartRepository(firestoreProvider)
+     */
+    @Provides
+    @Singleton
+    fun provideCartRepository(): CartRepository {
+        return FakeCartRepository()
     }
 }
 

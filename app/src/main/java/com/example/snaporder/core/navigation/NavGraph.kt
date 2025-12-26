@@ -19,6 +19,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.snaporder.feature.auth.AuthViewModel
+import com.example.snaporder.feature.cart.CartScreen
 import com.example.snaporder.feature.menu.MenuScreen
 
 /**
@@ -71,7 +72,15 @@ fun SnapOrderNavGraph(
         
         // User Cart screen
         composable(NavRoutes.USER_CART) {
-            PlaceholderScreen(title = "Cart", description = "Review items, select table, place order")
+            CartScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onPlaceOrderClick = {
+                    // TODO: Navigate to order result screen
+                    navController.navigate(NavRoutes.USER_ORDER)
+                }
+            )
         }
         
         // User Order screen

@@ -63,8 +63,8 @@ class OrderBusinessLogic @Inject constructor(
         val orderItems = cartItems.map { cartItem ->
             OrderItem(
                 menuItemId = cartItem.menuItemId,
-                menuItemName = cartItem.menuItemName,
-                price = cartItem.price,
+                menuItemName = cartItem.name,
+                price = cartItem.price.toDouble(),
                 quantity = cartItem.quantity
             )
         }
@@ -144,8 +144,8 @@ class OrderBusinessLogic @Inject constructor(
                 // New item: add to map
                 itemMap[cartItem.menuItemId] = OrderItem(
                     menuItemId = cartItem.menuItemId,
-                    menuItemName = cartItem.menuItemName,
-                    price = cartItem.price,
+                    menuItemName = cartItem.name,
+                    price = cartItem.price.toDouble(),
                     quantity = cartItem.quantity
                 )
             }
