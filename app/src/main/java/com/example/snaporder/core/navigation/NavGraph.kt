@@ -20,6 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.feature.cart.CartScreen
+import com.example.snaporder.feature.history.OrderHistoryScreen
 import com.example.snaporder.feature.menu.MenuScreen
 import com.example.snaporder.feature.order.OrderResultScreen
 
@@ -62,6 +63,9 @@ fun SnapOrderNavGraph(
                 onCartClick = {
                     navController.navigate(NavRoutes.USER_CART)
                 },
+                onHistoryClick = {
+                    navController.navigate(NavRoutes.USER_HISTORY)
+                },
                 onBackClick = {
                     // Navigate back to auth (logout)
                     navController.navigate(NavRoutes.AUTH) {
@@ -101,7 +105,15 @@ fun SnapOrderNavGraph(
         
         // User History screen
         composable(NavRoutes.USER_HISTORY) {
-            PlaceholderScreen(title = "History", description = "View past orders")
+            OrderHistoryScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onOrderClick = { orderId ->
+                    // TODO: Navigate to order detail screen
+                    // For now, can navigate to order result with orderId
+                }
+            )
         }
         
         // Admin flow - nested navigation handled by AdminNavGraph

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +47,7 @@ import com.example.snaporder.ui.theme.SnapOrdersColors
 @Composable
 fun MenuScreen(
     onCartClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {},
     onBackClick: () -> Unit = {},
     viewModel: MenuViewModel = hiltViewModel()
 ) {
@@ -59,6 +61,7 @@ fun MenuScreen(
                     viewModel.onCartClick()
                     onCartClick()
                 },
+                onHistoryClick = onHistoryClick,
                 onBackClick = onBackClick
             )
         },
@@ -109,6 +112,7 @@ fun MenuScreen(
 private fun MenuTopAppBar(
     cartItemCount: Int,
     onCartClick: () -> Unit,
+    onHistoryClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
     TopAppBar(
@@ -138,6 +142,16 @@ private fun MenuTopAppBar(
             }
         },
         actions = {
+            // History button
+            IconButton(onClick = onHistoryClick) {
+                Icon(
+                    imageVector = Icons.Filled.History,
+                    contentDescription = "Order History",
+                    tint = SnapOrdersColors.TextPrimary
+                )
+            }
+            
+            // Cart button
             Box {
                 IconButton(onClick = onCartClick) {
                     Icon(
@@ -453,11 +467,12 @@ private fun MenuScreenPreview() {
         
         Scaffold(
             topBar = {
-                MenuTopAppBar(
-                    cartItemCount = 3,
-                    onCartClick = {},
-                    onBackClick = {}
-                )
+            MenuTopAppBar(
+                cartItemCount = 3,
+                onCartClick = {},
+                onHistoryClick = {},
+                onBackClick = {}
+            )
             },
             containerColor = SnapOrdersColors.Background
         ) { paddingValues ->
