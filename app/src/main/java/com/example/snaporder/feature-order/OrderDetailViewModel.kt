@@ -1,7 +1,8 @@
 package com.example.snaporder.feature.order
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.example.snaporder.core.data.OrderHistoryRepository
+import com.example.snaporder.core.firestore.OrderRepository
 import com.example.snaporder.core.model.Order
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,24 +13,18 @@ import javax.inject.Inject
  * Order Detail ViewModel for managing order detail screen state.
  * 
  * ARCHITECTURE:
- * - Uses OrderHistoryRepository interface (currently FakeOrderHistoryRepository)
- * - Can swap to Firestore implementation without changing this code
+ * - Uses OrderRepository to fetch order from Firestore
  * - Manages UI state via StateFlow
- * - Loads a single order by ID
- * 
- * FUTURE INTEGRATION:
- * - Will receive orderId from navigation arguments
- * - Will fetch real Order from Firestore using OrderRepository.getOrderById()
- * - Will handle real-time order status updates
+ * - Loads a single order by ID from Firestore
  */
 @HiltViewModel
 class OrderDetailViewModel @Inject constructor(
-    private val orderHistoryRepository: OrderHistoryRepository
+    private val orderRepository: OrderRepository
 ) : BaseViewModel<OrderDetailUiState>() {
     
     override fun createInitialState(): OrderDetailUiState {
         return OrderDetailUiState(
-            isLoading = true,
+            isLoading = false,
             order = null,
             errorMessage = null
         )
@@ -38,12 +33,23 @@ class OrderDetailViewModel @Inject constructor(
     private var currentOrderId: String? = null
     
     /**
-     * Load order by ID.
+     * Load order by ID from Firestore.
      * Called when screen is opened with an orderId.
      * 
      * @param orderId The ID of the order to load
      */
     fun loadOrder(orderId: String) {
+        if (orderId.isBlank()) {
+            updateState {
+                copy(
+                    isLoading = false,
+                    order = null,
+                    errorMessage = "Order ID is required"
+                )
+            }
+            return
+        }
+        
         if (currentOrderId == orderId && currentState.order != null) {
             // Already loaded, no need to reload
             return
@@ -54,9 +60,12 @@ class OrderDetailViewModel @Inject constructor(
             updateState { copy(isLoading = true, errorMessage = null) }
             
             try {
-                val order = orderHistoryRepository.getOrderById(orderId)
+                Log.d("OrderDetailViewModel", "loadOrder: Loading order with ID='$orderId'")
+                
+                val order = orderRepository.getOrder(orderId)
                 
                 if (order == null) {
+                    Log.w("OrderDetailViewModel", "loadOrder: Order not found with ID='$orderId'")
                     updateState {
                         copy(
                             isLoading = false,
@@ -65,6 +74,7 @@ class OrderDetailViewModel @Inject constructor(
                         )
                     }
                 } else {
+                    Log.d("OrderDetailViewModel", "loadOrder: Order loaded successfully - table=${order.tableNumber}, items=${order.items.size}, total=${order.totalPrice}")
                     updateState {
                         copy(
                             isLoading = false,
@@ -74,6 +84,7 @@ class OrderDetailViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                Log.e("OrderDetailViewModel", "loadOrder: Error loading order", e)
                 updateState {
                     copy(
                         isLoading = false,

@@ -276,9 +276,6 @@ class CartViewModel @Inject constructor(
                     onSuccess = { placementResult ->
                         Log.i("CartViewModel", "onPlaceOrderClick: Order placement successful - $placementResult")
                         
-                        // Clear cart after successful order placement
-                        cartRepository.clearCart()
-                        Log.d("CartViewModel", "onPlaceOrderClick: Cart cleared")
                         
                         when (placementResult) {
                             is OrderBusinessLogic.OrderPlacementResult.Created -> {
@@ -298,6 +295,9 @@ class CartViewModel @Inject constructor(
                                 updateState { copy(isLoading = false, errorMessage = null) }
                             }
                         }
+                        // Clear cart after successful order placement
+                        cartRepository.clearCart()
+                        Log.d("CartViewModel", "onPlaceOrderClick: Cart cleared")
                     },
                     onFailure = { error ->
                         Log.e("CartViewModel", "onPlaceOrderClick: Order placement failed", error)

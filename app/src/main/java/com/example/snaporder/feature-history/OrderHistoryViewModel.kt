@@ -7,6 +7,7 @@ import com.example.snaporder.core.model.Order
 import com.example.snaporder.core.session.UserSessionManager
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -27,6 +28,8 @@ class OrderHistoryViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val userSessionManager: UserSessionManager
 ) : BaseViewModel<OrderHistoryUiState>() {
+    
+    private var ordersCollectionJob: Job? = null
     
     override fun createInitialState(): OrderHistoryUiState {
         return OrderHistoryUiState(
@@ -62,45 +65,36 @@ class OrderHistoryViewModel @Inject constructor(
         
         Log.d("OrderHistoryViewModel", "loadOrders: Loading orders for user ID='$userId'")
         
-        viewModelScope.launch {
-            updateState { copy(isLoading = true, errorMessage = null) }
-            
-            try {
-                // Observe orders from Firestore (real-time updates)
-                orderRepository.getUserOrders(userId)
-                    .onEach { orders ->
-                        Log.d("OrderHistoryViewModel", "loadOrders: Received ${orders.size} orders from Firestore")
-                        
-                        // Orders are already sorted by createdAt DESC from repository
-                        updateState {
-                            copy(
-                                isLoading = false,
-                                orders = orders,
-                                errorMessage = null
-                            )
-                        }
+        // Cancel previous collection if any
+        ordersCollectionJob?.cancel()
+        
+        updateState { copy(isLoading = true, errorMessage = null) }
+        
+        // Observe orders from Firestore (real-time updates)
+        ordersCollectionJob = viewModelScope.launch {
+            orderRepository.getUserOrders(userId)
+                .catch { error ->
+                    Log.e("OrderHistoryViewModel", "loadOrders: Error loading orders", error)
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            orders = emptyList(),
+                            errorMessage = "Failed to load orders: ${error.message}"
+                        )
                     }
-                    .catch { error ->
-                        Log.e("OrderHistoryViewModel", "loadOrders: Error loading orders", error)
-                        updateState {
-                            copy(
-                                isLoading = false,
-                                orders = emptyList(),
-                                errorMessage = "Failed to load orders: ${error.message}"
-                            )
-                        }
-                    }
-                    .launchIn(viewModelScope)
-            } catch (e: Exception) {
-                Log.e("OrderHistoryViewModel", "loadOrders: Exception loading orders", e)
-                updateState {
-                    copy(
-                        isLoading = false,
-                        orders = emptyList(),
-                        errorMessage = "Failed to load orders: ${e.message}"
-                    )
                 }
-            }
+                .collect { orders ->
+                    Log.d("OrderHistoryViewModel", "loadOrders: Received ${orders.size} orders from Firestore")
+                    
+                    // Orders are already sorted by createdAt DESC from repository
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            orders = orders,
+                            errorMessage = null
+                        )
+                    }
+                }
         }
     }
     

@@ -42,25 +42,43 @@ class OrderRepository @Inject constructor(
     
     /**
      * Get all orders for a specific user.
+     * Note: Uses whereEqualTo only (no orderBy) to avoid requiring a composite index.
+     * Orders will be sorted in the ViewModel if needed.
      */
     fun getUserOrders(userId: String): Flow<List<Order>> = kotlinx.coroutines.flow.callbackFlow {
+        Log.d("OrderRepository", "getUserOrders: Starting listener for userId='$userId'")
+        
         val listener = ordersCollection
             .whereEqualTo("userId", userId)
-            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
+                    Log.e("OrderRepository", "getUserOrders: Firestore error for userId='$userId'", error)
+                    // Don't close the flow on error, just emit empty list
+                    // The error will be caught by the catch block in ViewModel
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
                 
                 val orders = snapshot?.documents?.mapNotNull { doc ->
-                    doc.toOrder()
+                    try {
+                        doc.toOrder()
+                    } catch (e: Exception) {
+                        Log.e("OrderRepository", "getUserOrders: Error converting document ${doc.id}", e)
+                        null
+                    }
                 } ?: emptyList()
                 
-                trySend(orders)
+                // Sort by createdAt descending in-memory (since we can't use orderBy without index)
+                val sortedOrders = orders.sortedByDescending { it.createdAt?.seconds ?: 0L }
+                
+                Log.d("OrderRepository", "getUserOrders: Emitting ${sortedOrders.size} orders for userId='$userId'")
+                trySend(sortedOrders)
             }
         
-        awaitClose { listener.remove() }
+        awaitClose {
+            Log.d("OrderRepository", "getUserOrders: Closing listener for userId='$userId'")
+            listener.remove()
+        }
     }
     
     /**

@@ -2,7 +2,6 @@ package com.example.snaporder.core.navigation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -18,14 +16,12 @@ import androidx.compose.ui.unit.dp
 import com.example.snaporder.ui.theme.SnapOrdersColors
 
 /**
- * Bottom Navigation Bar with Cart, History, Profile icons and Order button in the middle.
+ * Bottom Navigation Bar with Cart, History, and Profile icons.
  * 
  * LAYOUT:
  * - Cart icon (left)
- * - History icon (left-center)
- * - Order button (center, elevated)
- * - Profile icon (right-center)
- * - (Right side reserved for future)
+ * - History icon (center)
+ * - Profile icon (right)
  */
 @Composable
 fun BottomNavigationBar(
@@ -33,8 +29,7 @@ fun BottomNavigationBar(
     cartItemCount: Int = 0,
     onCartClick: () -> Unit,
     onHistoryClick: () -> Unit,
-    onProfileClick: () -> Unit,
-    onOrderClick: () -> Unit
+    onProfileClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -68,14 +63,6 @@ fun BottomNavigationBar(
                 onClick = onHistoryClick
             )
             
-            // Order Button (Center, Elevated)
-            OrderButton(
-                onClick = onOrderClick,
-                modifier = Modifier
-                    .size(56.dp)
-                    .offset(y = (-12).dp) // Elevate above other icons
-            )
-            
             // Profile Icon
             BottomNavItem(
                 icon = Icons.Filled.Person,
@@ -83,9 +70,6 @@ fun BottomNavigationBar(
                 isSelected = currentRoute == NavRoutes.USER_PROFILE,
                 onClick = onProfileClick
             )
-            
-            // Spacer for balance (right side)
-            Spacer(modifier = Modifier.width(48.dp))
         }
     }
 }
@@ -104,14 +88,17 @@ private fun BottomNavItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(64.dp)
-            .height(56.dp),
+            .height(56.dp)
+            .padding(horizontal = 4.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Box {
+        Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center
+        ) {
             IconButton(
                 onClick = onClick,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = icon,
@@ -150,33 +137,10 @@ private fun BottomNavItem(
             } else {
                 SnapOrdersColors.TextSecondary
             },
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1
         )
     }
 }
 
-/**
- * Order Button - Elevated button in the center of bottom navigation.
- */
-@Composable
-private fun OrderButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier
-            .shadow(elevation = 6.dp, shape = CircleShape)
-            .clip(CircleShape),
-        containerColor = SnapOrdersColors.Primary,
-        shape = CircleShape
-    ) {
-        Icon(
-            imageVector = Icons.Filled.ShoppingBag,
-            contentDescription = "Order",
-            tint = SnapOrdersColors.OnPrimary,
-            modifier = Modifier.size(28.dp)
-        )
-    }
-}
 

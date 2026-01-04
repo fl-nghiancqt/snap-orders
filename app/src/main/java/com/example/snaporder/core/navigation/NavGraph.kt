@@ -82,9 +82,6 @@ fun SnapOrderNavGraph(
                 onProfileClick = {
                     navController.navigate(NavRoutes.USER_PROFILE)
                 },
-                onOrderClick = {
-                    navController.navigate(NavRoutes.USER_CART)
-                },
                 onBackClick = {
                     // Navigate back to auth (logout)
                     navController.navigate(NavRoutes.AUTH) {

@@ -184,27 +184,46 @@ fun OrderHistoryCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Order ID and Table
+                // Order ID (horizontal label-value, no truncation)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
+                        text = "Order ID:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SnapOrdersColors.TextSecondary
+                    )
+                    Text(
                         text = order.id,
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
+                        color = SnapOrdersColors.TextPrimary,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Visible
+                    )
+                }
+                
+                // Table Number (horizontal label-value)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Table:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SnapOrdersColors.TextSecondary
+                    )
+                    Text(
+                        text = "#${order.tableNumber}",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
                         color = SnapOrdersColors.TextPrimary
-                    )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SnapOrdersColors.TextSecondary
-                    )
-                    Text(
-                        text = "Table #${order.tableNumber}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SnapOrdersColors.TextSecondary
                     )
                 }
                 

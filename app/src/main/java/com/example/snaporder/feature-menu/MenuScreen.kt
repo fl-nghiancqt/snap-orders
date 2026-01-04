@@ -56,7 +56,6 @@ fun MenuScreen(
     onCartClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onOrderClick: () -> Unit = {},
     onBackClick: () -> Unit = {},
     viewModel: MenuViewModel = hiltViewModel()
 ) {
@@ -67,13 +66,6 @@ fun MenuScreen(
     Scaffold(
         topBar = {
             MenuTopAppBar(
-                cartItemCount = uiState.cartItemCount,
-                onCartClick = {
-                    viewModel.onCartClick()
-                    onCartClick()
-                },
-                onHistoryClick = onHistoryClick,
-                onProfileClick = onProfileClick,
                 onBackClick = onBackClick
             )
         },
@@ -86,8 +78,7 @@ fun MenuScreen(
                     onCartClick()
                 },
                 onHistoryClick = onHistoryClick,
-                onProfileClick = onProfileClick,
-                onOrderClick = onOrderClick
+                onProfileClick = onProfileClick
             )
         },
         containerColor = SnapOrdersColors.Background
@@ -135,10 +126,6 @@ fun MenuScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MenuTopAppBar(
-    cartItemCount: Int,
-    onCartClick: () -> Unit,
-    onHistoryClick: () -> Unit,
-    onProfileClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
     TopAppBar(
@@ -165,54 +152,6 @@ private fun MenuTopAppBar(
                     contentDescription = "Back",
                     tint = SnapOrdersColors.TextPrimary
                 )
-            }
-        },
-        actions = {
-            // Profile button
-            IconButton(onClick = onProfileClick) {
-                Icon(
-                    imageVector = Icons.Filled.Person,
-                    contentDescription = "Profile",
-                    tint = SnapOrdersColors.TextPrimary
-                )
-            }
-            
-            // History button
-            IconButton(onClick = onHistoryClick) {
-                Icon(
-                    imageVector = Icons.Filled.History,
-                    contentDescription = "Order History",
-                    tint = SnapOrdersColors.TextPrimary
-                )
-            }
-            
-            // Cart button
-            Box {
-                IconButton(onClick = onCartClick) {
-                    Icon(
-                        imageVector = Icons.Filled.ShoppingCart,
-                        contentDescription = "Cart",
-                        tint = SnapOrdersColors.Primary
-                    )
-                }
-                if (cartItemCount > 0) {
-                    // Custom badge implementation
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 8.dp, y = (-8).dp)
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SnapOrdersColors.Error),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (cartItemCount > 99) "99+" else cartItemCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SnapOrdersColors.OnPrimary
-                        )
-                    }
-                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -503,10 +442,6 @@ private fun MenuScreenPreview() {
         Scaffold(
             topBar = {
             MenuTopAppBar(
-                cartItemCount = 3,
-                onCartClick = {},
-                onHistoryClick = {},
-                onProfileClick = {},
                 onBackClick = {}
             )
             },
