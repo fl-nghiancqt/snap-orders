@@ -2,11 +2,8 @@ package com.example.snaporder.core.di
 
 import com.example.snaporder.core.data.CartRepository
 import com.example.snaporder.core.data.FakeCartRepository
-import com.example.snaporder.core.data.FakeMenuRepository
-import com.example.snaporder.core.data.FakeOrderHistoryRepository
 import com.example.snaporder.core.data.FirestoreMenuDataSource
 import com.example.snaporder.core.data.MenuDataSource
-import com.example.snaporder.core.data.OrderHistoryRepository
 import com.example.snaporder.core.firestore.FirestoreProvider
 import com.example.snaporder.core.firestore.MenuRepository
 import com.example.snaporder.core.firestore.OrderRepository
@@ -78,17 +75,5 @@ object AppModule {
         return FakeCartRepository()
     }
     
-    /**
-     * Provides OrderHistoryRepository for UI development.
-     * Currently returns FakeOrderHistoryRepository.
-     * 
-     * TODO: Replace with FirestoreOrderHistoryRepository when ready:
-     * return FirestoreOrderHistoryRepository(firestoreProvider)
-     */
-    @Provides
-    @Singleton
-    fun provideOrderHistoryRepository(): OrderHistoryRepository {
-        return FakeOrderHistoryRepository()
-    }
 }
 

@@ -95,7 +95,10 @@ fun MenuScreen(
                 uiState.errorMessage != null && uiState.items.isEmpty() -> {
                     ErrorState(
                         message = uiState.errorMessage ?: "Unknown error",
-                        onRetry = { viewModel.refreshMenus() }
+                        onRetry = { 
+                            // Flow will automatically retry on next emission
+                            // No manual action needed
+                        }
                     )
                 }
                 uiState.items.isEmpty() && !uiState.isLoading -> {

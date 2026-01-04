@@ -82,15 +82,6 @@ class MenuViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
     
-    /**
-     * Refresh menu items manually.
-     * Since we're observing a Flow, items update automatically.
-     * This function is kept for API compatibility but doesn't need to do anything.
-     */
-    fun refreshMenus() {
-        // Menu items update automatically via Flow observer
-        // No action needed - Flow will emit new data when Firestore changes
-    }
     
     /**
      * Handle add to cart action.
@@ -136,7 +127,6 @@ class MenuViewModel @Inject constructor(
  * - Menu items list
  * - Cart item count (for badge display)
  * - Error message (if any)
- * - Refreshing state (for pull-to-refresh)
  */
 data class MenuUiState(
     val isLoading: Boolean = false,
