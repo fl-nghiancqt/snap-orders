@@ -36,5 +36,6 @@ object NavRoutes {
     // Admin Flow
     const val ADMIN_DASHBOARD = "admin_dashboard"
     const val ADMIN_MENU_MANAGEMENT = "admin_menu_management"
+    const val ADMIN_REPORT = "admin_report"
 }
 

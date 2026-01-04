@@ -27,6 +27,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.example.snaporder.feature.admin.AdminDashboardScreen
+import com.example.snaporder.feature.admin.AdminReportScreen
 import com.example.snaporder.feature.admin.MenuManagementScreen
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.feature.cart.CartScreen
@@ -181,6 +183,9 @@ fun SnapOrderNavGraph(
             AdminDashboardScreen(
                 onMenuManagementClick = {
                     navController.navigate(NavRoutes.ADMIN_MENU_MANAGEMENT)
+                },
+                onReportClick = {
+                    navController.navigate(NavRoutes.ADMIN_REPORT)
                 }
             )
         }
@@ -188,6 +193,15 @@ fun SnapOrderNavGraph(
         // Admin Menu Management screen
         composable(NavRoutes.ADMIN_MENU_MANAGEMENT) {
             MenuManagementScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Admin Report screen
+        composable(NavRoutes.ADMIN_REPORT) {
+            AdminReportScreen(
                 onBackClick = {
                     navController.popBackStack()
                 }
