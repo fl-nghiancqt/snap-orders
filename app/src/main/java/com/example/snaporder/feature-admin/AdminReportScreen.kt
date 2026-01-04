@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -686,6 +688,17 @@ private fun VerticalBarChartItem(
     revenue: String,
     modifier: Modifier = Modifier
 ) {
+    // Animate bar height from 0 to target value
+    val animatedHeight = remember { Animatable(0f) }
+    
+    LaunchedEffect(value) {
+        val targetHeight = (value / maxValue).toFloat().coerceIn(0f, 1f)
+        animatedHeight.animateTo(
+            targetValue = targetHeight,
+            animationSpec = tween(durationMillis = 800, delayMillis = 0)
+        )
+    }
+    
     Column(
         modifier = modifier
             .fillMaxHeight()
@@ -703,6 +716,7 @@ private fun VerticalBarChartItem(
             VerticalBarChart(
                 value = value,
                 maxValue = maxValue,
+                animatedProgress = animatedHeight.value,
                 modifier = Modifier.fillMaxSize()
             )
             // Revenue value on top of bar
@@ -734,12 +748,14 @@ private fun VerticalBarChartItem(
 private fun VerticalBarChart(
     value: Double,
     maxValue: Double,
+    animatedProgress: Float,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
-        val barHeight = ((value / maxValue) * height.toDouble()).toFloat().coerceAtLeast(0f).coerceAtMost(height)
+        val maxBarHeight = ((value / maxValue) * height.toDouble()).toFloat().coerceAtLeast(0f).coerceAtMost(height)
+        val barHeight = maxBarHeight * animatedProgress.coerceIn(0f, 1f)
         val barWidth = width * 0.7f // Use 70% of available width for the bar
         
         // Draw bar from bottom
