@@ -280,6 +280,163 @@ class AdminViewModel @Inject constructor(
             }
         }
     }
+    
+    /**
+     * Load revenue chart data based on period.
+     */
+    fun loadRevenueChartData(period: RevenuePeriod) {
+        viewModelScope.launch {
+            updateState { copy(isRevenueChartLoading = true, revenueChartError = null) }
+            
+            try {
+                val calendar = Calendar.getInstance()
+                val endDate = calendar.clone() as Calendar
+                endDate.set(Calendar.HOUR_OF_DAY, 23)
+                endDate.set(Calendar.MINUTE, 59)
+                endDate.set(Calendar.SECOND, 59)
+                endDate.set(Calendar.MILLISECOND, 999)
+                
+                val startDate = calendar.clone() as Calendar
+                when (period) {
+                    RevenuePeriod.WEEK -> {
+                        // Last 7 days
+                        startDate.add(Calendar.DAY_OF_YEAR, -6) // 7 days including today
+                    }
+                    RevenuePeriod.MONTH -> {
+                        // Last 30 days
+                        startDate.add(Calendar.DAY_OF_YEAR, -29) // 30 days including today
+                    }
+                    RevenuePeriod.YEAR -> {
+                        // Last 12 months
+                        startDate.add(Calendar.MONTH, -11) // 12 months including current month
+                        startDate.set(Calendar.DAY_OF_MONTH, 1)
+                    }
+                }
+                startDate.set(Calendar.HOUR_OF_DAY, 0)
+                startDate.set(Calendar.MINUTE, 0)
+                startDate.set(Calendar.SECOND, 0)
+                startDate.set(Calendar.MILLISECOND, 0)
+                
+                val startTimestamp = Timestamp(startDate.timeInMillis / 1000, 0)
+                val endTimestamp = Timestamp(endDate.timeInMillis / 1000, 0)
+                
+                Log.d("AdminViewModel", "loadRevenueChartData: Loading ${period.name} revenue from ${startTimestamp.seconds} to ${endTimestamp.seconds}")
+                
+                orderRepository.getAllOrders()
+                    .onEach { allOrders ->
+                        // Filter orders by date range
+                        val dateRangeOrders = allOrders.filter { order ->
+                            val orderTime = order.createdAt
+                            if (orderTime != null) {
+                                val orderSeconds = orderTime.seconds
+                                orderSeconds >= startTimestamp.seconds && orderSeconds <= endTimestamp.seconds
+                            } else {
+                                false
+                            }
+                        }
+                        
+                        // Only count PAID orders for revenue
+                        val paidOrders = dateRangeOrders.filter { it.status == OrderStatus.PAID }
+                        
+                        val revenueMap = mutableMapOf<String, Double>()
+                        
+                        when (period) {
+                            RevenuePeriod.WEEK, RevenuePeriod.MONTH -> {
+                                // Daily revenue
+                                paidOrders.forEach { order ->
+                                    val orderTime = order.createdAt
+                                    if (orderTime != null) {
+                                        val calendar = Calendar.getInstance()
+                                        calendar.timeInMillis = orderTime.seconds * 1000L
+                                        val dateKey = "${calendar.get(Calendar.YEAR)}-${String.format("%02d", calendar.get(Calendar.MONTH) + 1)}-${String.format("%02d", calendar.get(Calendar.DAY_OF_MONTH))}"
+                                        revenueMap[dateKey] = revenueMap.getOrDefault(dateKey, 0.0) + order.totalPrice
+                                    }
+                                }
+                                
+                                // Fill in missing days with 0 revenue
+                                val currentCal = startDate.clone() as Calendar
+                                while (currentCal.before(endDate) || currentCal == endDate) {
+                                    val dateKey = "${currentCal.get(Calendar.YEAR)}-${String.format("%02d", currentCal.get(Calendar.MONTH) + 1)}-${String.format("%02d", currentCal.get(Calendar.DAY_OF_MONTH))}"
+                                    if (!revenueMap.containsKey(dateKey)) {
+                                        revenueMap[dateKey] = 0.0
+                                    }
+                                    currentCal.add(Calendar.DAY_OF_YEAR, 1)
+                                }
+                            }
+                            RevenuePeriod.YEAR -> {
+                                // Monthly revenue
+                                paidOrders.forEach { order ->
+                                    val orderTime = order.createdAt
+                                    if (orderTime != null) {
+                                        val calendar = Calendar.getInstance()
+                                        calendar.timeInMillis = orderTime.seconds * 1000L
+                                        val dateKey = "${calendar.get(Calendar.YEAR)}-${String.format("%02d", calendar.get(Calendar.MONTH) + 1)}"
+                                        revenueMap[dateKey] = revenueMap.getOrDefault(dateKey, 0.0) + order.totalPrice
+                                    }
+                                }
+                                
+                                // Fill in missing months with 0 revenue
+                                val currentCal = startDate.clone() as Calendar
+                                val endCal = endDate.clone() as Calendar
+                                var monthCount = 0
+                                while (monthCount < 12 && (currentCal.before(endCal) || currentCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) && currentCal.get(Calendar.MONTH) <= endCal.get(Calendar.MONTH))) {
+                                    val dateKey = "${currentCal.get(Calendar.YEAR)}-${String.format("%02d", currentCal.get(Calendar.MONTH) + 1)}"
+                                    if (!revenueMap.containsKey(dateKey)) {
+                                        revenueMap[dateKey] = 0.0
+                                    }
+                                    currentCal.add(Calendar.MONTH, 1)
+                                    monthCount++
+                                }
+                            }
+                        }
+                        
+                        val revenueList = revenueMap.entries
+                            .sortedBy { it.key }
+                            .map { DailyRevenue(it.key, it.value) }
+                        
+                        Log.d("AdminViewModel", "loadRevenueChartData: Found ${revenueList.size} data points for ${period.name}")
+                        
+                        updateState {
+                            when (period) {
+                                RevenuePeriod.WEEK -> copy(
+                                    isRevenueChartLoading = false,
+                                    weeklyRevenue = revenueList,
+                                    revenueChartError = null
+                                )
+                                RevenuePeriod.MONTH -> copy(
+                                    isRevenueChartLoading = false,
+                                    monthlyRevenue = revenueList,
+                                    revenueChartError = null
+                                )
+                                RevenuePeriod.YEAR -> copy(
+                                    isRevenueChartLoading = false,
+                                    yearlyRevenue = revenueList,
+                                    revenueChartError = null
+                                )
+                            }
+                        }
+                    }
+                    .catch { error ->
+                        Log.e("AdminViewModel", "loadRevenueChartData: Error loading revenue chart", error)
+                        updateState {
+                            copy(
+                                isRevenueChartLoading = false,
+                                revenueChartError = "Failed to load revenue chart: ${error.message}"
+                            )
+                        }
+                    }
+                    .launchIn(viewModelScope)
+            } catch (e: Exception) {
+                Log.e("AdminViewModel", "loadRevenueChartData: Exception", e)
+                updateState {
+                    copy(
+                        isRevenueChartLoading = false,
+                        revenueChartError = "Failed to load revenue chart: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -299,6 +456,15 @@ data class DailyRevenue(
 )
 
 /**
+ * Enum for revenue chart time period.
+ */
+enum class RevenuePeriod {
+    WEEK,    // Last 7 days
+    MONTH,   // Last 30 days
+    YEAR     // Last 12 months
+}
+
+/**
  * Admin UI State.
  */
 data class AdminUiState(
@@ -315,6 +481,12 @@ data class AdminUiState(
     val orderStatisticsByStatus: Map<OrderStatus, Int> = emptyMap(),
     val popularMenuItems: List<PopularMenuItem> = emptyList(),
     val dailyRevenueTrends: List<DailyRevenue> = emptyList(),
-    val customReportError: String? = null
+    val customReportError: String? = null,
+    // Revenue chart data
+    val weeklyRevenue: List<DailyRevenue> = emptyList(),
+    val monthlyRevenue: List<DailyRevenue> = emptyList(),
+    val yearlyRevenue: List<DailyRevenue> = emptyList(),
+    val isRevenueChartLoading: Boolean = false,
+    val revenueChartError: String? = null
 )
 
