@@ -1,5 +1,6 @@
 package com.example.snaporder.core.firestore
 
+import android.util.Log
 import com.example.snaporder.core.constants.FirestoreCollections
 import com.example.snaporder.core.model.User
 import com.example.snaporder.core.model.UserRole
@@ -85,18 +86,75 @@ class UserRepository @Inject constructor(
     /**
      * Get user by email/username.
      * Used for login with username and password.
+     * Email is normalized to lowercase for case-insensitive matching.
      */
     suspend fun getUserByEmail(email: String): User? {
         return try {
-            val snapshot = usersCollection
-                .whereEqualTo("email", email)
+            // Normalize email to lowercase for case-insensitive matching
+            val normalizedEmail = email.trim().lowercase()
+            
+            Log.d("UserRepository", "getUserByEmail: Searching for email='$email' (normalized='$normalizedEmail')")
+            
+            // First, let's try the exact match
+            var snapshot = usersCollection
+                .whereEqualTo("email", normalizedEmail)
                 .limit(1)
                 .get()
                 .await()
             
-            snapshot.documents.firstOrNull()?.toUser()
+            Log.d("UserRepository", "getUserByEmail: Query with normalized email returned ${snapshot.documents.size} documents")
+            
+            // If no results, try without normalization (in case email wasn't stored lowercase)
+            if (snapshot.documents.isEmpty()) {
+                Log.d("UserRepository", "getUserByEmail: Trying case-sensitive search for email='$email'")
+                snapshot = usersCollection
+                    .whereEqualTo("email", email.trim())
+                    .limit(1)
+                    .get()
+                    .await()
+                Log.d("UserRepository", "getUserByEmail: Case-sensitive query returned ${snapshot.documents.size} documents")
+            }
+            
+            // Log all documents found for debugging
+            snapshot.documents.forEachIndexed { index, doc ->
+                Log.d("UserRepository", "getUserByEmail: Document $index - id='${doc.id}', data=${doc.data}")
+            }
+            
+            val user = snapshot.documents.firstOrNull()?.toUser()
+            
+            if (user != null) {
+                Log.d("UserRepository", "getUserByEmail: User found - id='${user.id}', name='${user.name}', email='${user.email}', role='${user.role}'")
+                Log.d("UserRepository", "getUserByEmail: User password length=${user.password.length}, password='${user.password.replace(Regex("."), "*")}' (masked)")
+            } else {
+                Log.w("UserRepository", "getUserByEmail: No user found with email='$normalizedEmail' or '$email'")
+                Log.d("UserRepository", "getUserByEmail: Query returned ${snapshot.documents.size} documents")
+                
+                // List all users for debugging
+                listAllUsersForDebugging()
+            }
+            
+            user
         } catch (e: Exception) {
+            Log.e("UserRepository", "getUserByEmail: Error searching for email='$email'", e)
+            e.printStackTrace()
             null
+        }
+    }
+    
+    /**
+     * Debug helper: List all users in Firestore.
+     * This helps identify if the user exists and how the email is stored.
+     */
+    private suspend fun listAllUsersForDebugging() {
+        try {
+            val allUsers = usersCollection.get().await()
+            Log.d("UserRepository", "DEBUG: Total users in Firestore: ${allUsers.documents.size}")
+            allUsers.documents.forEachIndexed { index, doc ->
+                val data = doc.data
+                Log.d("UserRepository", "DEBUG: User $index - id='${doc.id}', email='${data?.get("email")}', name='${data?.get("name")}', role='${data?.get("role")}'")
+            }
+        } catch (e: Exception) {
+            Log.e("UserRepository", "DEBUG: Error listing all users", e)
         }
     }
     
@@ -115,22 +173,31 @@ private fun User.toMap(): Map<String, Any> {
         put("name", name)
         put("role", role.name)
         put("createdAt", createdAt)
-        if (email.isNotEmpty()) put("email", email)
+        // Normalize email to lowercase for consistent storage and querying
+        if (email.isNotEmpty()) put("email", email.trim().lowercase())
         if (password.isNotEmpty()) put("password", password)
     }
 }
 
 private fun com.google.firebase.firestore.DocumentSnapshot.toUser(): User? {
     return try {
+        val emailValue = getString("email") ?: ""
+        val passwordValue = getString("password") ?: ""
+        val roleValue = getString("role") ?: "USER"
+        
+        Log.d("UserRepository", "toUser: Converting document id='$id'")
+        Log.d("UserRepository", "toUser: email='$emailValue', password length=${passwordValue.length}, role='$roleValue'")
+        
         User(
             id = id,
             name = getString("name") ?: "",
-            email = getString("email") ?: "",
-            password = getString("password") ?: "",
-            role = UserRole.valueOf(getString("role") ?: "USER"),
+            email = emailValue,
+            password = passwordValue,
+            role = UserRole.valueOf(roleValue),
             createdAt = getLong("createdAt") ?: 0L
         )
     } catch (e: Exception) {
+        Log.e("UserRepository", "toUser: Error converting document id='$id'", e)
         null
     }
 }

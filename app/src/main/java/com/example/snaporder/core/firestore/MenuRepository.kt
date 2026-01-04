@@ -80,6 +80,37 @@ class MenuRepository @Inject constructor(
             null
         }
     }
+    
+    /**
+     * Get all menus (suspend function for one-time fetch).
+     * Used in admin screen to load all menus.
+     */
+    suspend fun getAllMenus(): List<MenuItem> {
+        return try {
+            val snapshot = menusCollection.get().await()
+            snapshot.documents.mapNotNull { doc ->
+                doc.toMenuItem()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    
+    /**
+     * Update menu item.
+     * Used to update availability or other menu properties.
+     */
+    suspend fun updateMenu(menu: MenuItem): Result<Unit> {
+        return try {
+            if (menu.id.isEmpty()) {
+                return Result.failure(IllegalArgumentException("Menu ID cannot be empty"))
+            }
+            menusCollection.document(menu.id).set(menu.toMap()).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 
 // Extension function for Firestore conversion
@@ -95,5 +126,16 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toMenuItem(): MenuIte
     } catch (e: Exception) {
         null
     }
+}
+
+// Extension function to convert MenuItem to Firestore map
+private fun MenuItem.toMap(): Map<String, Any> {
+    return mapOf(
+        "id" to id,
+        "name" to name,
+        "price" to price,
+        "available" to available,
+        "imageUrl" to imageUrl
+    )
 }
 

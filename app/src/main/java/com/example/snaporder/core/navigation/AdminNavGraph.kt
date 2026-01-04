@@ -1,15 +1,20 @@
 package com.example.snaporder.core.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.snaporder.feature.admin.MenuManagementScreen
+import com.example.snaporder.ui.theme.SnapOrdersColors
 
 /**
  * Admin navigation graph.
@@ -29,7 +34,70 @@ fun AdminNavGraph(navController: NavHostController) {
         startDestination = NavRoutes.ADMIN_DASHBOARD
     ) {
         composable(NavRoutes.ADMIN_DASHBOARD) {
-            PlaceholderScreen(title = "Admin Dashboard", description = "View all orders and manage statuses")
+            AdminDashboardScreen(
+                onMenuManagementClick = {
+                    navController.navigate(NavRoutes.ADMIN_MENU_MANAGEMENT)
+                }
+            )
+        }
+        
+        composable(NavRoutes.ADMIN_MENU_MANAGEMENT) {
+            MenuManagementScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Admin Dashboard Screen - Main admin screen with navigation options.
+ */
+@Composable
+private fun AdminDashboardScreen(
+    onMenuManagementClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SnapOrdersColors.Background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Text(
+                text = "Admin Dashboard",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = SnapOrdersColors.TextPrimary
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Menu Management Button
+            Button(
+                onClick = onMenuManagementClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SnapOrdersColors.Primary
+                )
+            ) {
+                Text(
+                    text = "Menu Management",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = SnapOrdersColors.OnPrimary
+                )
+            }
         }
     }
 }

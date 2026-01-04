@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.snaporder.core.model.UserRole
 import com.example.snaporder.core.navigation.NavRoutes
+import com.example.snaporder.feature.auth.LoginResult
 import kotlinx.coroutines.launch
 
 /**
@@ -322,13 +323,28 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(32.dp))
                 
                 // Login button - centered
-                // TEMPORARY: Skip validation and navigate directly to menu screen
                 Button(
                     onClick = {
                         focusManager.clearFocus()
-                        // Skip validation - navigate directly to menu
-                        navController.navigate(NavRoutes.USER_MENU) {
-                            popUpTo(NavRoutes.AUTH) { inclusive = true }
+                        coroutineScope.launch {
+                            val result = viewModel.login(username, password)
+                            when (result) {
+                                is LoginResult.Success -> {
+                                    // Navigate based on role
+                                    if (result.role == UserRole.ADMIN) {
+                                        navController.navigate(NavRoutes.ADMIN_DASHBOARD) {
+                                            popUpTo(NavRoutes.AUTH) { inclusive = true }
+                                        }
+                                    } else {
+                                        navController.navigate(NavRoutes.USER_MENU) {
+                                            popUpTo(NavRoutes.AUTH) { inclusive = true }
+                                        }
+                                    }
+                                }
+                                is LoginResult.Failure -> {
+                                    // Error is already shown in UI state
+                                }
+                            }
                         }
                     },
                     modifier = Modifier

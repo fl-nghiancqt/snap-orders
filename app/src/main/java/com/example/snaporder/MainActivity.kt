@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.snaporder.core.navigation.SnapOrderNavGraph
+import com.example.snaporder.data.firebase.FirebaseConnectionTest
+import com.example.snaporder.data.firebase.FirestoreMenuSeeder
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.ui.theme.SnapOrderTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -22,6 +24,14 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Temporary: Test Firestore connection
+        FirebaseConnectionTest.test()
+        
+        // WARNING: One-time seed script - Remove this call after successful execution!
+        // This will write ~60 menu items to Firestore "menus" collection
+        // FirestoreMenuSeeder.seedMenusToFirestore()
+        
         setContent {
             SnapOrderTheme {
                 Surface(

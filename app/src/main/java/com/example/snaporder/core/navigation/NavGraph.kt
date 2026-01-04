@@ -1,13 +1,20 @@
 package com.example.snaporder.core.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,12 +27,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.example.snaporder.feature.admin.MenuManagementScreen
 import com.example.snaporder.feature.auth.AuthViewModel
 import com.example.snaporder.feature.cart.CartScreen
 import com.example.snaporder.feature.history.OrderHistoryScreen
 import com.example.snaporder.feature.menu.MenuScreen
 import com.example.snaporder.feature.order.OrderDetailScreen
 import com.example.snaporder.feature.order.OrderResultScreen
+import com.example.snaporder.ui.theme.SnapOrdersColors
 
 /**
  * Main navigation graph for SnapOrder app.
@@ -138,38 +147,73 @@ fun SnapOrderNavGraph(
             )
         }
         
-        // Admin flow - nested navigation handled by AdminNavGraph
+        // Admin Dashboard screen
         composable(NavRoutes.ADMIN_DASHBOARD) {
-            AdminNavGraph(navController = navController)
+            AdminDashboardScreen(
+                onMenuManagementClick = {
+                    navController.navigate(NavRoutes.ADMIN_MENU_MANAGEMENT)
+                }
+            )
+        }
+        
+        // Admin Menu Management screen
+        composable(NavRoutes.ADMIN_MENU_MANAGEMENT) {
+            MenuManagementScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }
 
 /**
- * Placeholder screen for navigation testing
+ * Admin Dashboard Screen - Main admin screen with navigation options.
  */
 @Composable
-private fun PlaceholderScreen(title: String, description: String) {
+private fun AdminDashboardScreen(
+    onMenuManagementClick: () -> Unit
+) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SnapOrdersColors.Background),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(24.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                text = "Admin Dashboard",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = SnapOrdersColors.TextPrimary
             )
+            
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            
+            // Menu Management Button
+            Button(
+                onClick = onMenuManagementClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SnapOrdersColors.Primary
+                )
+            ) {
+                Text(
+                    text = "Menu Management",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = SnapOrdersColors.OnPrimary
+                )
+            }
         }
     }
 }

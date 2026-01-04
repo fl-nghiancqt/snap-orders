@@ -1,5 +1,6 @@
 package com.example.snaporder.feature.auth
 
+import android.util.Log
 import com.example.snaporder.core.firestore.UserRepository
 import com.example.snaporder.core.model.User
 import com.example.snaporder.core.model.UserRole
@@ -45,50 +46,95 @@ class AuthViewModel @Inject constructor(
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
     
     /**
-     * Login with username/email and password.
-     * Validates credentials and role, then sets current user.
+     * Login with email and password.
+     * Validates credentials against Firestore users collection and role, then sets current user.
      * 
-     * @param username Email or username
-     * @param password User password (optional - if empty, skip password validation for school project)
+     * AUTHENTICATION FLOW:
+     * 1. Validate input (email and password are required)
+     * 2. Query Firestore users collection by email
+     * 3. Verify password matches
+     * 4. Validate user role
+     * 5. Set current user and return success
+     * 
+     * @param username Email address
+     * @param password User password (required)
      * @return LoginResult indicating success or failure with reason
      */
     suspend fun login(username: String, password: String): LoginResult {
+        Log.d("AuthViewModel", "login: Attempting login with email='$username'")
         updateState { copy(isLoading = true, error = null) }
         
         return try {
             // Validate input
             if (username.isBlank()) {
-                updateState { copy(isLoading = false, error = "Username is required") }
-                return LoginResult.Failure("Username is required")
+                Log.w("AuthViewModel", "login: Email is blank")
+                updateState { copy(isLoading = false, error = "Email is required") }
+                return LoginResult.Failure("Email is required")
             }
             
-            // Find user by email/username
-            val user = userRepository.getUserByEmail(username.trim())
+            if (password.isBlank()) {
+                Log.w("AuthViewModel", "login: Password is blank")
+                updateState { copy(isLoading = false, error = "Password is required") }
+                return LoginResult.Failure("Password is required")
+            }
+            
+            val trimmedEmail = username.trim().lowercase()
+            Log.d("AuthViewModel", "login: Normalized email='$trimmedEmail'")
+            
+            // Find user by email in Firestore users collection
+            val user = userRepository.getUserByEmail(trimmedEmail)
             if (user == null) {
+                Log.w("AuthViewModel", "login: User not found for email='$trimmedEmail'")
                 updateState { 
                     copy(
                         isLoading = false, 
-                        error = "Invalid username or password"
+                        error = "Invalid email or password"
                     ) 
                 }
-                return LoginResult.Failure("Invalid username or password")
+                return LoginResult.Failure("Invalid email or password")
             }
             
-            // Validate password if provided (optional for school project)
-            if (password.isNotBlank() && user.password.isNotBlank()) {
-                if (user.password != password) {
-                    updateState { 
-                        copy(
-                            isLoading = false, 
-                            error = "Invalid username or password"
-                        ) 
-                    }
-                    return LoginResult.Failure("Invalid username or password")
+            Log.d("AuthViewModel", "login: User found - id='${user.id}', name='${user.name}', role='${user.role}'")
+            Log.d("AuthViewModel", "login: Stored password length=${user.password.length}, entered password length=${password.length}")
+            Log.d("AuthViewModel", "login: Stored password='${user.password.replace(Regex("."), "*")}' (masked), entered password='${password.replace(Regex("."), "*")}' (masked)")
+            
+            // Validate password - must match exactly
+            if (user.password.isBlank()) {
+                Log.w("AuthViewModel", "login: User has no password set - id='${user.id}'")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "User account has no password set"
+                    ) 
                 }
+                return LoginResult.Failure("User account has no password set")
             }
+            
+            // Trim both passwords for comparison (in case of whitespace issues)
+            val storedPassword = user.password.trim()
+            val enteredPassword = password.trim()
+            
+            Log.d("AuthViewModel", "login: Comparing passwords - stored='${storedPassword.replace(Regex("."), "*")}' (masked), entered='${enteredPassword.replace(Regex("."), "*")}' (masked)")
+            Log.d("AuthViewModel", "login: Passwords match: ${storedPassword == enteredPassword}")
+            
+            if (storedPassword != enteredPassword) {
+                Log.w("AuthViewModel", "login: Password mismatch for user id='${user.id}'")
+                Log.w("AuthViewModel", "login: Stored password chars: ${storedPassword.map { it.code }}")
+                Log.w("AuthViewModel", "login: Entered password chars: ${enteredPassword.map { it.code }}")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "Invalid email or password"
+                    ) 
+                }
+                return LoginResult.Failure("Invalid email or password")
+            }
+            
+            Log.d("AuthViewModel", "login: Password validated successfully")
             
             // Validate role is valid
             if (user.role !in UserRole.values()) {
+                Log.e("AuthViewModel", "login: Invalid role='${user.role}' for user id='${user.id}'")
                 updateState { 
                     copy(
                         isLoading = false, 
@@ -107,10 +153,13 @@ class AuthViewModel @Inject constructor(
                 ) 
             }
             
+            Log.i("AuthViewModel", "login: Login successful - user id='${user.id}', name='${user.name}', role='${user.role}'")
+            
             // Return success with role for navigation
             LoginResult.Success(user.role)
             
         } catch (e: Exception) {
+            Log.e("AuthViewModel", "login: Exception during login", e)
             updateState { 
                 copy(
                     isLoading = false, 
