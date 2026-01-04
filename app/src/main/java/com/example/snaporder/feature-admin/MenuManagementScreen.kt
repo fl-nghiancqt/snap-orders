@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
@@ -44,6 +45,7 @@ fun MenuManagementScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val seedResult by viewModel.seedResult.collectAsStateWithLifecycle()
+    var showAddDialog by remember { mutableStateOf(false) }
     
     Scaffold(
         topBar = {
@@ -51,6 +53,18 @@ fun MenuManagementScreen(
                 onBackClick = onBackClick,
                 onRefresh = { viewModel.refresh() }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = SnapOrdersColors.Primary,
+                contentColor = SnapOrdersColors.OnPrimary
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Add Menu Item"
+                )
+            }
         },
         containerColor = SnapOrdersColors.Background
     ) { paddingValues ->
@@ -120,6 +134,17 @@ fun MenuManagementScreen(
                     }
                 }
             }
+        }
+        
+        // Add Menu Item Dialog
+        if (showAddDialog) {
+            AddMenuItemDialog(
+                onDismiss = { showAddDialog = false },
+                onConfirm = { name, price, imageUrl, available ->
+                    viewModel.createMenuItem(name, price, imageUrl, available)
+                    showAddDialog = false
+                }
+            )
         }
     }
 }
@@ -685,6 +710,174 @@ private fun EmptyFilterState(filterQuery: String) {
                 color = SnapOrdersColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+/**
+ * Dialog for adding a new menu item.
+ */
+@Composable
+private fun AddMenuItemDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double, String, Boolean) -> Unit
+) {
+    var nameText by remember { mutableStateOf("") }
+    var priceText by remember { mutableStateOf("") }
+    var imageUrlText by remember { mutableStateOf("") }
+    var available by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = SnapOrdersColors.Background
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Add New Menu Item",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = SnapOrdersColors.TextPrimary
+                )
+                
+                // Name field
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { newValue ->
+                        nameText = newValue
+                        errorMessage = null
+                    },
+                    label = { Text("Item Name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SnapOrdersColors.Primary,
+                        unfocusedBorderColor = SnapOrdersColors.Outline
+                    ),
+                    isError = errorMessage != null && nameText.isBlank()
+                )
+                
+                // Price field
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { newValue ->
+                        // Only allow numeric input
+                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                            priceText = newValue
+                            errorMessage = null
+                        }
+                    },
+                    label = { Text("Price (VND) *") },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SnapOrdersColors.Primary,
+                        unfocusedBorderColor = SnapOrdersColors.Outline
+                    ),
+                    isError = errorMessage != null && priceText.isBlank()
+                )
+                
+                // Image URL field (optional)
+                OutlinedTextField(
+                    value = imageUrlText,
+                    onValueChange = { imageUrlText = it },
+                    label = { Text("Image URL (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SnapOrdersColors.Primary,
+                        unfocusedBorderColor = SnapOrdersColors.Outline
+                    )
+                )
+                
+                // Availability toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Available",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SnapOrdersColors.TextPrimary
+                    )
+                    Switch(
+                        checked = available,
+                        onCheckedChange = { available = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = SnapOrdersColors.Primary,
+                            checkedTrackColor = SnapOrdersColors.Primary.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+                
+                // Error message
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SnapOrdersColors.Error
+                    )
+                }
+                
+                // Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = SnapOrdersColors.TextPrimary
+                        )
+                    ) {
+                        Text("Cancel")
+                    }
+                    
+                    Button(
+                        onClick = {
+                            val trimmedName = nameText.trim()
+                            val price = priceText.toIntOrNull()
+                            
+                            when {
+                                trimmedName.isBlank() -> {
+                                    errorMessage = "Name cannot be empty"
+                                }
+                                price == null || price < 0 -> {
+                                    errorMessage = "Please enter a valid price"
+                                }
+                                else -> {
+                                    onConfirm(trimmedName, price.toDouble(), imageUrlText.trim(), available)
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SnapOrdersColors.Primary
+                        )
+                    ) {
+                        Text("Add")
+                    }
+                }
+            }
         }
     }
 }

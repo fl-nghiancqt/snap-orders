@@ -97,6 +97,34 @@ class MenuRepository @Inject constructor(
     }
     
     /**
+     * Create a new menu item in Firestore.
+     * Generates a new document ID if menu.id is empty.
+     * 
+     * @param menu The menu item to create
+     * @return Result containing the document ID on success
+     */
+    suspend fun createMenu(menu: MenuItem): Result<String> {
+        return try {
+            val documentRef = if (menu.id.isNotEmpty()) {
+                menusCollection.document(menu.id)
+            } else {
+                menusCollection.document() // Auto-generate ID
+            }
+            
+            val menuToCreate = if (menu.id.isEmpty()) {
+                menu.copy(id = documentRef.id)
+            } else {
+                menu
+            }
+            
+            documentRef.set(menuToCreate.toMap()).await()
+            Result.success(documentRef.id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
      * Update menu item.
      * Used to update availability or other menu properties.
      */

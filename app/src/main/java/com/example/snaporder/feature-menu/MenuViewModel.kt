@@ -2,7 +2,7 @@ package com.example.snaporder.feature.menu
 
 import androidx.lifecycle.viewModelScope
 import com.example.snaporder.core.data.CartRepository
-import com.example.snaporder.core.data.MenuDataSource
+import com.example.snaporder.core.firestore.MenuRepository
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.catch
@@ -15,14 +15,14 @@ import javax.inject.Inject
  * Menu ViewModel for managing menu screen state.
  * 
  * ARCHITECTURE:
- * - Uses MenuDataSource interface for menu items
+ * - Uses MenuRepository to observe menu items in real-time (Flow)
  * - Uses CartRepository for cart operations
  * - Observes cart changes to update cart item count
  * - Manages UI state via StateFlow
  */
 @HiltViewModel
 class MenuViewModel @Inject constructor(
-    private val menuDataSource: MenuDataSource,
+    private val menuRepository: MenuRepository,
     private val cartRepository: CartRepository
 ) : BaseViewModel<MenuUiState>() {
     
@@ -36,8 +36,35 @@ class MenuViewModel @Inject constructor(
     }
     
     init {
-        loadMenus()
+        observeMenus()
         observeCartItems()
+    }
+    
+    /**
+     * Observe menu items from Firestore in real-time.
+     * Uses Flow to automatically update UI when data changes.
+     */
+    private fun observeMenus() {
+        menuRepository.getAvailableMenuItems()
+            .onEach { menus ->
+                updateState {
+                    copy(
+                        isLoading = false,
+                        items = menus,
+                        errorMessage = null
+                    )
+                }
+            }
+            .catch { e ->
+                updateState {
+                    copy(
+                        isLoading = false,
+                        errorMessage = "Failed to load menu: ${e.message}",
+                        items = emptyList()
+                    )
+                }
+            }
+            .launchIn(viewModelScope)
     }
     
     /**
@@ -56,33 +83,13 @@ class MenuViewModel @Inject constructor(
     }
     
     /**
-     * Load menu items from data source.
-     * Called automatically on ViewModel creation.
-     * Can be called manually to retry after error.
+     * Refresh menu items manually.
+     * Since we're observing a Flow, items update automatically.
+     * This function is kept for API compatibility but doesn't need to do anything.
      */
-    fun loadMenus() {
-        viewModelScope.launch {
-            updateState { copy(isLoading = true, errorMessage = null) }
-            
-            try {
-                val menus = menuDataSource.getMenus()
-                updateState {
-                    copy(
-                        isLoading = false,
-                        items = menus,
-                        errorMessage = null
-                    )
-                }
-            } catch (e: Exception) {
-                updateState {
-                    copy(
-                        isLoading = false,
-                        errorMessage = "Failed to load menu: ${e.message}",
-                        items = emptyList()
-                    )
-                }
-            }
-        }
+    fun refreshMenus() {
+        // Menu items update automatically via Flow observer
+        // No action needed - Flow will emit new data when Firestore changes
     }
     
     /**
@@ -129,6 +136,7 @@ class MenuViewModel @Inject constructor(
  * - Menu items list
  * - Cart item count (for badge display)
  * - Error message (if any)
+ * - Refreshing state (for pull-to-refresh)
  */
 data class MenuUiState(
     val isLoading: Boolean = false,

@@ -89,16 +89,16 @@ fun MenuScreen(
                 .padding(paddingValues)
         ) {
             when {
-                uiState.isLoading -> {
+                uiState.isLoading && uiState.items.isEmpty() -> {
                     LoadingState()
                 }
-                uiState.errorMessage != null -> {
+                uiState.errorMessage != null && uiState.items.isEmpty() -> {
                     ErrorState(
                         message = uiState.errorMessage ?: "Unknown error",
-                        onRetry = { viewModel.loadMenus() }
+                        onRetry = { viewModel.refreshMenus() }
                     )
                 }
-                uiState.items.size == 0 -> {
+                uiState.items.isEmpty() && !uiState.isLoading -> {
                     EmptyState()
                 }
                 else -> {

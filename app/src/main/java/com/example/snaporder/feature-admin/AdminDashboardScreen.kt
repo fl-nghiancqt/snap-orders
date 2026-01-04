@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import com.example.snaporder.ui.theme.SnapOrdersColors
 fun AdminDashboardScreen(
     onMenuManagementClick: () -> Unit,
     onReportClick: () -> Unit,
+    onProfileClick: () -> Unit = {},
     viewModel: AdminViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -49,6 +51,15 @@ fun AdminDashboardScreen(
                         ),
                         color = SnapOrdersColors.TextPrimary
                     )
+                },
+                actions = {
+                    IconButton(onClick = onProfileClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "Profile",
+                            tint = SnapOrdersColors.Primary
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = SnapOrdersColors.Background

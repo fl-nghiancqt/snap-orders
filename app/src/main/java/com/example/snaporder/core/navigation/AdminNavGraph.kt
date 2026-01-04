@@ -42,6 +42,9 @@ fun AdminNavGraph(navController: NavHostController) {
                 },
                 onReportClick = {
                     navController.navigate(NavRoutes.ADMIN_REPORT)
+                },
+                onProfileClick = {
+                    navController.navigate(NavRoutes.USER_PROFILE)
                 }
             )
         }
