@@ -41,10 +41,18 @@ import com.example.snaporder.ui.theme.SnapOrdersColors
  */
 @Composable
 fun OrderResultScreen(
+    orderId: String,
     onBackToMenuClick: () -> Unit = {},
     onViewOrderDetailClick: () -> Unit = {},
     viewModel: OrderResultViewModel = hiltViewModel()
 ) {
+    // Load order when orderId changes
+    androidx.compose.runtime.LaunchedEffect(orderId) {
+        if (orderId.isNotBlank()) {
+            viewModel.loadOrder(orderId)
+        }
+    }
+    
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
     Box(
@@ -59,14 +67,24 @@ fun OrderResultScreen(
             uiState.errorMessage != null -> {
                 ErrorState(
                     message = uiState.errorMessage ?: "Unknown error",
-                    onRetry = { /* TODO: Retry logic */ }
+                    onRetry = { 
+                        if (orderId.isNotBlank()) {
+                            viewModel.loadOrder(orderId)
+                        }
+                    }
                 )
             }
             uiState.order != null -> {
+                val order = uiState.order!!
+                // Calculate subtotal from items
+                val subtotal = order.items.sumOf { it.totalPrice }.toInt()
+                // Calculate service fee: totalPrice - subtotal
+                val serviceFee = (order.totalPrice - subtotal).toInt()
+                
                 OrderResultContent(
-                    order = uiState.order!!,
-                    subtotal = viewModel.calculateSubtotal(uiState.order!!),
-                    serviceFee = viewModel.getServiceFee(),
+                    order = order,
+                    subtotal = subtotal,
+                    serviceFee = serviceFee,
                     onBackToMenuClick = {
                         viewModel.onBackToMenuClick()
                         onBackToMenuClick()
@@ -502,7 +520,7 @@ private fun formatPrice(price: Int): String {
 @Composable
 private fun OrderResultScreenPreview() {
     SnapOrderTheme {
-        OrderResultScreen()
+        OrderResultScreen(orderId = "ORD-001")
     }
 }
 

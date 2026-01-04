@@ -10,11 +10,17 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Alignment
+import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.snaporder.core.navigation.BottomNavigationBar
+import com.example.snaporder.core.navigation.NavRoutes
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
@@ -46,12 +52,17 @@ import com.example.snaporder.ui.theme.SnapOrdersColors
  */
 @Composable
 fun MenuScreen(
+    navController: NavController? = null,
     onCartClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
+    onOrderClick: () -> Unit = {},
     onBackClick: () -> Unit = {},
     viewModel: MenuViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val navBackStackEntry by navController?.currentBackStackEntryAsState() ?: kotlinx.coroutines.flow.flowOf(null).collectAsState(initial = null)
+    val currentRoute = navBackStackEntry?.destination?.route
     
     Scaffold(
         topBar = {
@@ -62,7 +73,21 @@ fun MenuScreen(
                     onCartClick()
                 },
                 onHistoryClick = onHistoryClick,
+                onProfileClick = onProfileClick,
                 onBackClick = onBackClick
+            )
+        },
+        bottomBar = {
+            BottomNavigationBar(
+                currentRoute = currentRoute,
+                cartItemCount = uiState.cartItemCount,
+                onCartClick = {
+                    viewModel.onCartClick()
+                    onCartClick()
+                },
+                onHistoryClick = onHistoryClick,
+                onProfileClick = onProfileClick,
+                onOrderClick = onOrderClick
             )
         },
         containerColor = SnapOrdersColors.Background
@@ -113,6 +138,7 @@ private fun MenuTopAppBar(
     cartItemCount: Int,
     onCartClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onProfileClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
     TopAppBar(
@@ -142,6 +168,15 @@ private fun MenuTopAppBar(
             }
         },
         actions = {
+            // Profile button
+            IconButton(onClick = onProfileClick) {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = "Profile",
+                    tint = SnapOrdersColors.TextPrimary
+                )
+            }
+            
             // History button
             IconButton(onClick = onHistoryClick) {
                 Icon(
@@ -471,6 +506,7 @@ private fun MenuScreenPreview() {
                 cartItemCount = 3,
                 onCartClick = {},
                 onHistoryClick = {},
+                onProfileClick = {},
                 onBackClick = {}
             )
             },

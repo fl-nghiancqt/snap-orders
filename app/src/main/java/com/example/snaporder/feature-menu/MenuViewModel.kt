@@ -1,9 +1,13 @@
 package com.example.snaporder.feature.menu
 
 import androidx.lifecycle.viewModelScope
+import com.example.snaporder.core.data.CartRepository
 import com.example.snaporder.core.data.MenuDataSource
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -11,14 +15,15 @@ import javax.inject.Inject
  * Menu ViewModel for managing menu screen state.
  * 
  * ARCHITECTURE:
- * - Uses MenuDataSource interface (currently FakeMenuRepository)
- * - Can swap to Firestore implementation without changing this code
+ * - Uses MenuDataSource interface for menu items
+ * - Uses CartRepository for cart operations
+ * - Observes cart changes to update cart item count
  * - Manages UI state via StateFlow
- * - Handles cart item count for UI display (not real cart logic yet)
  */
 @HiltViewModel
 class MenuViewModel @Inject constructor(
-    private val menuDataSource: MenuDataSource
+    private val menuDataSource: MenuDataSource,
+    private val cartRepository: CartRepository
 ) : BaseViewModel<MenuUiState>() {
     
     override fun createInitialState(): MenuUiState {
@@ -32,6 +37,22 @@ class MenuViewModel @Inject constructor(
     
     init {
         loadMenus()
+        observeCartItems()
+    }
+    
+    /**
+     * Observe cart items to update cart item count in real-time.
+     */
+    private fun observeCartItems() {
+        cartRepository.getCartItemsFlow()
+            .onEach { cartItems ->
+                val totalCount = cartItems.sumOf { it.quantity }
+                updateState { copy(cartItemCount = totalCount) }
+            }
+            .catch { e ->
+                // Handle error silently or log it
+            }
+            .launchIn(viewModelScope)
     }
     
     /**
@@ -66,16 +87,26 @@ class MenuViewModel @Inject constructor(
     
     /**
      * Handle add to cart action.
-     * Currently just increments cartItemCount for UI display.
-     * Real cart logic will be implemented later.
+     * Adds the menu item to the cart repository.
      * 
      * @param itemId The ID of the menu item to add
      */
     fun onAddToCart(itemId: String) {
-        val item = currentState.items.find { it.id == itemId }
-        if (item != null && item.available) {
-            updateState {
-                copy(cartItemCount = cartItemCount + 1)
+        viewModelScope.launch {
+            val item = currentState.items.find { it.id == itemId }
+            if (item != null && item.available) {
+                try {
+                    cartRepository.addItem(
+                        menuItemId = item.id,
+                        name = item.name,
+                        price = item.price
+                    )
+                    // Cart count will update automatically via observeCartItems()
+                } catch (e: Exception) {
+                    updateState {
+                        copy(errorMessage = "Failed to add item to cart: ${e.message}")
+                    }
+                }
             }
         }
     }

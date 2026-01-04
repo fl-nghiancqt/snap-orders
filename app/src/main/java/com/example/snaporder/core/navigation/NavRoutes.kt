@@ -22,9 +22,13 @@ object NavRoutes {
     // User Flow
     const val USER_MENU = "user_menu"
     const val USER_CART = "user_cart"
-    const val USER_ORDER = "user_order"
+    const val USER_ORDER = "user_order/{orderId}"
     const val USER_HISTORY = "user_history"
     const val USER_ORDER_DETAIL = "user_order_detail/{orderId}"
+    const val USER_PROFILE = "user_profile"
+    
+    // Helper function to build order result route
+    fun userOrder(orderId: String) = "user_order/$orderId"
     
     // Helper function to build order detail route
     fun userOrderDetail(orderId: String) = "user_order_detail/$orderId"

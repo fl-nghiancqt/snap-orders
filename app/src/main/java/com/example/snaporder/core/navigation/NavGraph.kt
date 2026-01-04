@@ -72,16 +72,37 @@ fun SnapOrderNavGraph(
         // User Menu screen
         composable(NavRoutes.USER_MENU) {
             MenuScreen(
+                navController = navController,
                 onCartClick = {
                     navController.navigate(NavRoutes.USER_CART)
                 },
                 onHistoryClick = {
                     navController.navigate(NavRoutes.USER_HISTORY)
                 },
+                onProfileClick = {
+                    navController.navigate(NavRoutes.USER_PROFILE)
+                },
+                onOrderClick = {
+                    navController.navigate(NavRoutes.USER_CART)
+                },
                 onBackClick = {
                     // Navigate back to auth (logout)
                     navController.navigate(NavRoutes.AUTH) {
                         popUpTo(NavRoutes.USER_MENU) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // User Profile screen
+        composable(NavRoutes.USER_PROFILE) {
+            com.example.snaporder.feature.profile.ProfileScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onLogoutClick = {
+                    navController.navigate(NavRoutes.AUTH) {
+                        popUpTo(NavRoutes.AUTH) { inclusive = false }
                     }
                 }
             )
@@ -93,26 +114,37 @@ fun SnapOrderNavGraph(
                 onBackClick = {
                     navController.popBackStack()
                 },
-                onPlaceOrderClick = {
-                    // TODO: Navigate to order result screen
-                    navController.navigate(NavRoutes.USER_ORDER)
+                onPlaceOrderClick = { orderId ->
+                    // Navigate to order result screen with order ID
+                    navController.navigate(NavRoutes.userOrder(orderId))
                 }
             )
         }
         
         // User Order Result screen
-        composable(NavRoutes.USER_ORDER) {
+        composable(
+            route = NavRoutes.USER_ORDER,
+            arguments = listOf(
+                navArgument("orderId") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
             OrderResultScreen(
+                orderId = orderId,
                 onBackToMenuClick = {
                     navController.navigate(NavRoutes.USER_MENU) {
                         popUpTo(NavRoutes.USER_MENU) { inclusive = false }
                     }
                 },
                 onViewOrderDetailClick = {
-                    // Navigate to order detail screen
-                    // Note: In a real app, we'd pass the orderId from the order result
-                    // For now, navigate to history where user can select an order
-                    navController.navigate(NavRoutes.USER_HISTORY)
+                    // Navigate to order detail screen with the order ID
+                    if (orderId.isNotBlank()) {
+                        navController.navigate(NavRoutes.userOrderDetail(orderId))
+                    } else {
+                        navController.navigate(NavRoutes.USER_HISTORY)
+                    }
                 }
             )
         }

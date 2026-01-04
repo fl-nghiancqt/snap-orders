@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.snaporder.core.firestore.UserRepository
 import com.example.snaporder.core.model.User
 import com.example.snaporder.core.model.UserRole
+import com.example.snaporder.core.session.UserSessionManager
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +32,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val userSessionManager: UserSessionManager
 ) : BaseViewModel<AuthUiState>() {
     
     override fun createInitialState(): AuthUiState {
@@ -40,10 +42,10 @@ class AuthViewModel @Inject constructor(
     
     /**
      * Current logged-in user.
-     * Set after successful login validation.
+     * Delegates to UserSessionManager for centralized session management.
+     * This ensures all screens can access the same user state.
      */
-    private val _currentUser = MutableStateFlow<User?>(null)
-    val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+    val currentUser: StateFlow<User?> = userSessionManager.currentUser
     
     /**
      * Login with email and password.
@@ -144,8 +146,11 @@ class AuthViewModel @Inject constructor(
                 return LoginResult.Failure("Invalid user role: ${user.role}")
             }
             
-            // Validation passed - set current user
-            _currentUser.value = user
+            // Validation passed - set current user in session manager
+            userSessionManager.setUser(user)
+            Log.i("AuthViewModel", "login: Current user set in session manager - id='${user.id}', name='${user.name}', role='${user.role}'")
+            Log.i("AuthViewModel", "login: UserSessionManager.currentUser is now: ${userSessionManager.getUser()?.id}")
+            
             updateState { 
                 copy(
                     isLoading = false, 
@@ -174,8 +179,10 @@ class AuthViewModel @Inject constructor(
      * Logout current user.
      */
     fun logout() {
-        _currentUser.value = null
+        Log.d("AuthViewModel", "logout: Logging out user - current user id='${userSessionManager.getUser()?.id}'")
+        userSessionManager.clearUser()
         setState(createInitialState())
+        Log.d("AuthViewModel", "logout: User logged out - UserSessionManager.currentUser is now: ${userSessionManager.getUser()?.id}")
     }
 }
 

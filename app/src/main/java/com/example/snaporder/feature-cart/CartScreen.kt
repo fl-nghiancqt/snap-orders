@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,12 +21,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.snaporder.core.di.UserSessionEntryPoint
 import com.example.snaporder.core.model.CartItem
 import com.example.snaporder.core.model.OrderDraft
+import com.example.snaporder.core.session.UserSessionManager
 import com.example.snaporder.ui.theme.SnapOrderTheme
 import com.example.snaporder.ui.theme.SnapOrdersColors
+import dagger.hilt.android.EntryPointAccessors
 
 /**
  * Cart Screen - Displays cart items, allows quantity adjustment,
@@ -48,10 +54,29 @@ import com.example.snaporder.ui.theme.SnapOrdersColors
 @Composable
 fun CartScreen(
     onBackClick: () -> Unit = {},
-    onPlaceOrderClick: () -> Unit = {},
-    viewModel: CartViewModel = hiltViewModel()
+    onPlaceOrderClick: (orderId: String) -> Unit = {},
+    viewModel: CartViewModel = hiltViewModel(),
+    userSessionManager: UserSessionManager = rememberUserSessionManager()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentUser by userSessionManager.currentUser.collectAsStateWithLifecycle()
+    val orderPlacementResult by viewModel.orderPlacementResult.collectAsStateWithLifecycle()
+    
+    // Handle navigation when order is successfully placed
+    LaunchedEffect(orderPlacementResult) {
+        when (val result = orderPlacementResult) {
+            is CartViewModel.OrderPlacementResult.Success -> {
+                viewModel.clearOrderPlacementResult()
+                onPlaceOrderClick(result.orderId)
+            }
+            is CartViewModel.OrderPlacementResult.Error -> {
+                // Error is already shown in UI state
+            }
+            null -> {
+                // No result yet
+            }
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -80,6 +105,8 @@ fun CartScreen(
                 else -> {
                     CartContent(
                         orderDraft = uiState.orderDraft!!,
+                        currentUser = currentUser,
+                        viewModel = viewModel,
                         onIncreaseQuantity = { itemId ->
                             viewModel.onIncreaseQuantity(itemId)
                         },
@@ -90,9 +117,18 @@ fun CartScreen(
                             viewModel.onTableNumberChange(value)
                         },
                         onPlaceOrderClick = {
-                            viewModel.onPlaceOrderClick()
-                            if (uiState.orderDraft?.isValid == true) {
-                                onPlaceOrderClick()
+                            android.util.Log.d("CartScreen", "Place Order button clicked")
+                            android.util.Log.d("CartScreen", "currentUser: ${currentUser?.id}, name: ${currentUser?.name}")
+                            android.util.Log.d("CartScreen", "orderDraft: ${uiState.orderDraft}, isValid: ${uiState.orderDraft?.isValid}")
+                            val userId = currentUser?.id ?: ""
+                            if (userId.isNotBlank()) {
+                                android.util.Log.d("CartScreen", "Calling viewModel.onPlaceOrderClick with userId='$userId'")
+                                viewModel.onPlaceOrderClick(userId)
+                            } else {
+                                android.util.Log.w("CartScreen", "Cannot place order: userId is blank. User not logged in?")
+                                // Set error message via ViewModel
+                                // viewModel.setErrorMessage("Please log in to place an order")
+                                viewModel.onPlaceOrderClick(userId)
                             }
                         },
                         errorMessage = uiState.errorMessage
@@ -142,6 +178,8 @@ private fun CartTopAppBar(
 @Composable
 private fun CartContent(
     orderDraft: OrderDraft,
+    currentUser: com.example.snaporder.core.model.User?,
+    viewModel: CartViewModel,
     onIncreaseQuantity: (String) -> Unit,
     onDecreaseQuantity: (String) -> Unit,
     onTableNumberChange: (String) -> Unit,
@@ -197,9 +235,24 @@ private fun CartContent(
         
         // Place order button
         item {
+            // Log button state for debugging
+            LaunchedEffect(orderDraft.isValid, orderDraft.items.size, orderDraft.tableNumber) {
+                android.util.Log.d("CartScreen", "PlaceOrderButton state - enabled: ${orderDraft.isValid}, items: ${orderDraft.items.size}, table: ${orderDraft.tableNumber}")
+            }
+            
             PlaceOrderButton(
                 enabled = orderDraft.isValid,
                 onClick = onPlaceOrderClick
+            )
+        }
+        
+        // DEBUG: Test order button (for debugging Firestore order creation)
+        item {
+            DebugTestOrderButton(
+                onClick = {
+                    val userId = currentUser?.id ?: "test_user"
+                    viewModel.createTestOrderDirectly(userId)
+                }
             )
         }
         
@@ -439,7 +492,14 @@ private fun PlaceOrderButton(
     onClick: () -> Unit
 ) {
     Button(
-        onClick = onClick,
+        onClick = {
+            android.util.Log.d("CartScreen", "PlaceOrderButton: onClick triggered, enabled=$enabled")
+            if (enabled) {
+                onClick()
+            } else {
+                android.util.Log.w("CartScreen", "PlaceOrderButton: Button is disabled, cannot place order")
+            }
+        },
         enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
@@ -460,6 +520,34 @@ private fun PlaceOrderButton(
             } else {
                 SnapOrdersColors.TextSecondary
             }
+        )
+    }
+}
+
+/**
+ * DEBUG: Test Order Button - Creates a test order directly in Firestore.
+ * This button is for debugging purposes only.
+ */
+@Composable
+private fun DebugTestOrderButton(
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error
+        )
+    ) {
+        Text(
+            text = "🔧 DEBUG: Create Test Order",
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.onError
         )
     }
 }
@@ -590,6 +678,21 @@ private fun ErrorCard(message: String) {
             color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.padding(16.dp)
         )
+    }
+}
+
+/**
+ * Remember UserSessionManager instance.
+ * This provides access to the shared user session from any composable.
+ */
+@Composable
+private fun rememberUserSessionManager(): UserSessionManager {
+    val context = LocalContext.current
+    return remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            UserSessionEntryPoint::class.java
+        ).userSessionManager()
     }
 }
 

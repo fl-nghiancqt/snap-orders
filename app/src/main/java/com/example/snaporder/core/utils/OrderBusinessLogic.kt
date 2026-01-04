@@ -1,5 +1,6 @@
 package com.example.snaporder.core.utils
 
+import android.util.Log
 import com.example.snaporder.core.firestore.OrderRepository
 import com.example.snaporder.core.model.CartItem
 import com.example.snaporder.core.model.Order
@@ -46,33 +47,75 @@ class OrderBusinessLogic @Inject constructor(
      * Create a new order with cart items.
      * 
      * BUSINESS RULE: This should only be called if validateTableAvailable() returns true.
+     * 
+     * VALIDATION:
+     * - Cart items must not be empty
+     * - Table must be available (no open orders)
      */
     suspend fun createNewOrder(
         tableNumber: Int,
         cartItems: List<CartItem>,
         userId: String
     ): Result<String> {
+        Log.d("OrderBusinessLogic", "createNewOrder: Called - table=$tableNumber, items=${cartItems.size}, userId='$userId'")
+        
+        // Validate cart items are not empty
+        if (cartItems.isEmpty()) {
+            Log.e("OrderBusinessLogic", "createNewOrder: Cart items are empty")
+            return Result.failure(
+                IllegalArgumentException("Cannot create order with empty cart. Please add items to cart first.")
+            )
+        }
+        
         // Validate table is available
         if (!validateTableAvailable(tableNumber)) {
+            Log.w("OrderBusinessLogic", "createNewOrder: Table $tableNumber already has an open order")
             return Result.failure(
                 IllegalStateException("Table $tableNumber already has an open order")
             )
         }
         
+        Log.d("OrderBusinessLogic", "createNewOrder: Converting cart items to order items")
         // Convert cart items to order items
-        val orderItems = cartItems.map { cartItem ->
-            OrderItem(
+        val orderItems = cartItems.mapIndexed { index, cartItem ->
+            Log.d("OrderBusinessLogic", "createNewOrder: Converting cart item $index:")
+            Log.d("OrderBusinessLogic", "createNewOrder:   cartItem.id: '${cartItem.id}'")
+            Log.d("OrderBusinessLogic", "createNewOrder:   cartItem.menuItemId: '${cartItem.menuItemId}'")
+            Log.d("OrderBusinessLogic", "createNewOrder:   cartItem.name: '${cartItem.name}'")
+            Log.d("OrderBusinessLogic", "createNewOrder:   cartItem.price: ${cartItem.price} (type: ${cartItem.price.javaClass.simpleName})")
+            Log.d("OrderBusinessLogic", "createNewOrder:   cartItem.quantity: ${cartItem.quantity}")
+            
+            val orderItem = OrderItem(
                 menuItemId = cartItem.menuItemId,
                 menuItemName = cartItem.name,
                 price = cartItem.price.toDouble(),
                 quantity = cartItem.quantity
             )
+            
+            Log.d("OrderBusinessLogic", "createNewOrder:   → orderItem.price: ${orderItem.price} (type: ${orderItem.price.javaClass.simpleName})")
+            Log.d("OrderBusinessLogic", "createNewOrder:   → orderItem.totalPrice: ${orderItem.totalPrice}")
+            
+            orderItem
         }
         
-        // Calculate total price
-        val totalPrice = orderItems.sumOf { it.totalPrice }
+        Log.d("OrderBusinessLogic", "createNewOrder: Converted to ${orderItems.size} order items")
         
-        // Create order
+        // Validate order items are not empty (double check)
+        if (orderItems.isEmpty()) {
+            Log.e("OrderBusinessLogic", "createNewOrder: Order items are empty after conversion")
+            return Result.failure(
+                IllegalArgumentException("Cannot create order with no items")
+            )
+        }
+        
+        // Calculate subtotal and service fee
+        val subtotal = orderItems.sumOf { it.totalPrice }
+        val serviceFee = 10000.0 // Fixed service fee
+        val totalPrice = subtotal + serviceFee
+        
+        Log.d("OrderBusinessLogic", "createNewOrder: Calculated totals - subtotal=$subtotal, serviceFee=$serviceFee, total=$totalPrice")
+        
+        // Create order with status CREATED (initial processing status)
         val order = Order(
             tableNumber = tableNumber,
             items = orderItems,
@@ -82,39 +125,189 @@ class OrderBusinessLogic @Inject constructor(
             userId = userId
         )
         
-        return orderRepository.createOrder(order)
+        Log.d("OrderBusinessLogic", "createNewOrder: Order object created - table=${order.tableNumber}, items=${order.items.size}, total=${order.totalPrice}, status=${order.status}")
+        
+        // Save order to Firestore
+        Log.d("OrderBusinessLogic", "createNewOrder: Calling orderRepository.createOrder()")
+        val result = orderRepository.createOrder(order)
+        
+        result.fold(
+            onSuccess = { orderId ->
+                Log.i("OrderBusinessLogic", "createNewOrder: Order saved to Firestore successfully - id='$orderId'")
+            },
+            onFailure = { error ->
+                Log.e("OrderBusinessLogic", "createNewOrder: Failed to save order to Firestore", error)
+            }
+        )
+        
+        return result
+    }
+    
+    /**
+     * Check if an order can accept new items.
+     * Orders can accept items when status is CREATED or PREPARING.
+     * Orders with status PAID or CANCELLED cannot accept new items.
+     * 
+     * @param order The order to check
+     * @return true if order can accept new items, false otherwise
+     */
+    fun canAddItemsToOrder(order: Order): Boolean {
+        return order.status == OrderStatus.CREATED || order.status == OrderStatus.PREPARING
     }
     
     /**
      * Add more items to an existing open order.
      * 
-     * BUSINESS RULE: This merges new items with existing items.
-     * If the same menu item exists, quantities are combined.
+     * BUSINESS RULE: 
+     * - Can add items when status is CREATED or PREPARING
+     * - Cannot add items when status is PAID or CANCELLED
+     * - Merges new items with existing items
+     * - If the same menu item exists, quantities are combined
+     * 
+     * VALIDATION:
+     * - New cart items must not be empty
      */
     suspend fun addMoreToExistingOrder(
         existingOrder: Order,
         newCartItems: List<CartItem>
     ): Result<Unit> {
-        // Validate order is open
-        if (!existingOrder.isOpen()) {
+        Log.d("OrderBusinessLogic", "addMoreToExistingOrder: Called - orderId='${existingOrder.id}', newItems=${newCartItems.size}")
+        
+        // Validate new cart items are not empty
+        if (newCartItems.isEmpty()) {
+            Log.e("OrderBusinessLogic", "addMoreToExistingOrder: New cart items are empty")
             return Result.failure(
-                IllegalStateException("Cannot add items to a closed order")
+                IllegalArgumentException("Cannot add empty items to order. Please add items to cart first.")
             )
         }
         
+        // Validate order can accept new items
+        if (!canAddItemsToOrder(existingOrder)) {
+            Log.e("OrderBusinessLogic", "addMoreToExistingOrder: Cannot add items to order with status ${existingOrder.status}")
+            return Result.failure(
+                IllegalStateException("Cannot add items to order with status ${existingOrder.status}. Order must be CREATED or PREPARING.")
+            )
+        }
+        
+        Log.d("OrderBusinessLogic", "addMoreToExistingOrder: Merging items...")
         // Merge items
         val mergedItems = mergeOrderItems(existingOrder.items, newCartItems)
         
-        // Calculate new total price
-        val newTotalPrice = mergedItems.sumOf { it.totalPrice }
+        Log.d("OrderBusinessLogic", "addMoreToExistingOrder: Merged to ${mergedItems.size} items")
         
-        // Update order
+        // Validate merged items are not empty
+        if (mergedItems.isEmpty()) {
+            Log.e("OrderBusinessLogic", "addMoreToExistingOrder: Merged items are empty")
+            return Result.failure(
+                IllegalArgumentException("Cannot update order with no items")
+            )
+        }
+        
+        // Calculate new subtotal and service fee
+        val subtotal = mergedItems.sumOf { it.totalPrice }
+        val serviceFee = 10000.0 // Fixed service fee
+        val newTotalPrice = subtotal + serviceFee
+        
+        Log.d("OrderBusinessLogic", "addMoreToExistingOrder: Calculated totals - subtotal=$subtotal, serviceFee=$serviceFee, total=$newTotalPrice")
+        
+        // Update order in Firestore
         val updatedOrder = existingOrder.copy(
             items = mergedItems,
             totalPrice = newTotalPrice
         )
         
-        return orderRepository.updateOrder(updatedOrder)
+        Log.d("OrderBusinessLogic", "addMoreToExistingOrder: Calling orderRepository.updateOrder()")
+        val result = orderRepository.updateOrder(updatedOrder)
+        
+        result.fold(
+            onSuccess = {
+                Log.i("OrderBusinessLogic", "addMoreToExistingOrder: Order updated successfully in Firestore")
+            },
+            onFailure = { error ->
+                Log.e("OrderBusinessLogic", "addMoreToExistingOrder: Failed to update order in Firestore", error)
+            }
+        )
+        
+        return result
+    }
+    
+    /**
+     * Mark an order as paid (completed).
+     * This changes the order status to PAID, allowing the table to have a new order.
+     * 
+     * @param orderId The ID of the order to mark as paid
+     * @return Result indicating success or failure
+     */
+    suspend fun markOrderAsPaid(orderId: String): Result<Unit> {
+        return orderRepository.updateOrderStatus(orderId, OrderStatus.PAID)
+    }
+    
+    /**
+     * Process order placement: create new order or add to existing order.
+     * 
+     * BUSINESS RULES:
+     * - If table has no open order: create new order with status CREATED
+     * - If table has open order (CREATED or PREPARING): add items to existing order
+     * - If table has PAID order: create new order (table is available)
+     * 
+     * VALIDATION:
+     * - Cart items must not be empty
+     * 
+     * @param tableNumber The table number
+     * @param cartItems The cart items to add
+     * @param userId The user ID creating the order
+     * @return Result containing order ID (for new orders) or Unit (for updated orders)
+     */
+    suspend fun processOrderPlacement(
+        tableNumber: Int,
+        cartItems: List<CartItem>,
+        userId: String
+    ): Result<OrderPlacementResult> {
+        Log.d("OrderBusinessLogic", "processOrderPlacement: Called - table=$tableNumber, items=${cartItems.size}, userId='$userId'")
+        
+        // Validate cart items are not empty
+        if (cartItems.isEmpty()) {
+            Log.e("OrderBusinessLogic", "processOrderPlacement: Cart items are empty")
+            return Result.failure(
+                IllegalArgumentException("Cannot place order with empty cart. Please add items to cart first.")
+            )
+        }
+        
+        // Check for existing open order
+        Log.d("OrderBusinessLogic", "processOrderPlacement: Checking for existing open order on table $tableNumber")
+        val existingOrder = findOpenOrderByTable(tableNumber)
+        
+        return if (existingOrder != null) {
+            Log.d("OrderBusinessLogic", "processOrderPlacement: Found existing order - id='${existingOrder.id}', status=${existingOrder.status}")
+            // Table has open order - add items to existing order
+            if (!canAddItemsToOrder(existingOrder)) {
+                Log.w("OrderBusinessLogic", "processOrderPlacement: Cannot add items to order with status ${existingOrder.status}")
+                Result.failure(
+                    IllegalStateException("Table $tableNumber has an order with status ${existingOrder.status}. Please mark the order as paid before creating a new order.")
+                )
+            } else {
+                Log.d("OrderBusinessLogic", "processOrderPlacement: Adding items to existing order")
+                addMoreToExistingOrder(existingOrder, cartItems).map {
+                    Log.i("OrderBusinessLogic", "processOrderPlacement: Items added to existing order successfully")
+                    OrderPlacementResult.Updated(existingOrder.id)
+                }
+            }
+        } else {
+            Log.d("OrderBusinessLogic", "processOrderPlacement: No existing order found, creating new order")
+            // No open order - create new order and save to Firestore
+            createNewOrder(tableNumber, cartItems, userId).map { orderId ->
+                Log.i("OrderBusinessLogic", "processOrderPlacement: New order created successfully - id='$orderId'")
+                OrderPlacementResult.Created(orderId)
+            }
+        }
+    }
+    
+    /**
+     * Result of order placement operation.
+     */
+    sealed class OrderPlacementResult {
+        data class Created(val orderId: String) : OrderPlacementResult()
+        data class Updated(val orderId: String) : OrderPlacementResult()
     }
     
     /**

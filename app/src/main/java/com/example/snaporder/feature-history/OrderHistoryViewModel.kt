@@ -1,10 +1,15 @@
 package com.example.snaporder.feature.history
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.example.snaporder.core.data.OrderHistoryRepository
+import com.example.snaporder.core.firestore.OrderRepository
 import com.example.snaporder.core.model.Order
+import com.example.snaporder.core.session.UserSessionManager
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -12,19 +17,15 @@ import javax.inject.Inject
  * Order History ViewModel for managing order history screen state.
  * 
  * ARCHITECTURE:
- * - Uses OrderHistoryRepository interface (currently FakeOrderHistoryRepository)
- * - Can swap to Firestore implementation without changing this code
+ * - Uses OrderRepository to fetch orders from Firestore
+ * - Filters orders by current logged-in user ID
  * - Manages UI state via StateFlow
- * - Handles order list loading and refresh
- * 
- * FUTURE INTEGRATION:
- * - Will filter orders by current logged-in user ID
- * - Will handle real-time updates from Firestore
- * - Will support pagination for large order lists
+ * - Handles real-time updates from Firestore
  */
 @HiltViewModel
 class OrderHistoryViewModel @Inject constructor(
-    private val orderHistoryRepository: OrderHistoryRepository
+    private val orderRepository: OrderRepository,
+    private val userSessionManager: UserSessionManager
 ) : BaseViewModel<OrderHistoryUiState>() {
     
     override fun createInitialState(): OrderHistoryUiState {
@@ -40,28 +41,58 @@ class OrderHistoryViewModel @Inject constructor(
     }
     
     /**
-     * Load order history from repository.
+     * Load order history from Firestore for the current user.
      * Called automatically on ViewModel creation.
      */
     fun loadOrders() {
+        val currentUser = userSessionManager.getUser()
+        val userId = currentUser?.id
+        
+        if (userId.isNullOrBlank()) {
+            Log.w("OrderHistoryViewModel", "loadOrders: No user logged in")
+            updateState {
+                copy(
+                    isLoading = false,
+                    orders = emptyList(),
+                    errorMessage = "Please log in to view order history"
+                )
+            }
+            return
+        }
+        
+        Log.d("OrderHistoryViewModel", "loadOrders: Loading orders for user ID='$userId'")
+        
         viewModelScope.launch {
             updateState { copy(isLoading = true, errorMessage = null) }
             
             try {
-                val orders = orderHistoryRepository.getOrdersByUser()
-                // Sort by createdAt descending (newest first)
-                val sortedOrders = orders.sortedByDescending { 
-                    it.createdAt?.seconds ?: 0L 
-                }
-                
-                updateState {
-                    copy(
-                        isLoading = false,
-                        orders = sortedOrders,
-                        errorMessage = null
-                    )
-                }
+                // Observe orders from Firestore (real-time updates)
+                orderRepository.getUserOrders(userId)
+                    .onEach { orders ->
+                        Log.d("OrderHistoryViewModel", "loadOrders: Received ${orders.size} orders from Firestore")
+                        
+                        // Orders are already sorted by createdAt DESC from repository
+                        updateState {
+                            copy(
+                                isLoading = false,
+                                orders = orders,
+                                errorMessage = null
+                            )
+                        }
+                    }
+                    .catch { error ->
+                        Log.e("OrderHistoryViewModel", "loadOrders: Error loading orders", error)
+                        updateState {
+                            copy(
+                                isLoading = false,
+                                orders = emptyList(),
+                                errorMessage = "Failed to load orders: ${error.message}"
+                            )
+                        }
+                    }
+                    .launchIn(viewModelScope)
             } catch (e: Exception) {
+                Log.e("OrderHistoryViewModel", "loadOrders: Exception loading orders", e)
                 updateState {
                     copy(
                         isLoading = false,
@@ -76,6 +107,7 @@ class OrderHistoryViewModel @Inject constructor(
     /**
      * Refresh order history.
      * Called when user pulls to refresh.
+     * Reloads orders from Firestore.
      */
     fun onRefresh() {
         loadOrders()

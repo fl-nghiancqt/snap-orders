@@ -4,6 +4,7 @@ import com.example.snaporder.core.data.CartRepository
 import com.example.snaporder.core.data.FakeCartRepository
 import com.example.snaporder.core.data.FakeMenuRepository
 import com.example.snaporder.core.data.FakeOrderHistoryRepository
+import com.example.snaporder.core.data.FirestoreMenuDataSource
 import com.example.snaporder.core.data.MenuDataSource
 import com.example.snaporder.core.data.OrderHistoryRepository
 import com.example.snaporder.core.firestore.FirestoreProvider
@@ -43,16 +44,13 @@ object AppModule {
     }
     
     /**
-     * Provides MenuDataSource for UI development.
-     * Currently returns FakeMenuRepository.
-     * 
-     * TODO: Replace with FirestoreMenuDataSource when ready:
-     * return FirestoreMenuDataSource(firestoreProvider)
+     * Provides MenuDataSource for menu operations.
+     * Uses FirestoreMenuDataSource to load menus from Firestore.
      */
     @Provides
     @Singleton
-    fun provideMenuDataSource(): MenuDataSource {
-        return FakeMenuRepository()
+    fun provideMenuDataSource(menuRepository: MenuRepository): MenuDataSource {
+        return FirestoreMenuDataSource(menuRepository)
     }
     
     @Provides

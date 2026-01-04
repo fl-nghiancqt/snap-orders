@@ -1,5 +1,6 @@
 package com.example.snaporder.core.firestore
 
+import android.util.Log
 import com.example.snaporder.core.constants.FirestoreCollections
 import com.example.snaporder.core.model.Order
 import com.example.snaporder.core.model.OrderStatus
@@ -90,27 +91,143 @@ class OrderRepository @Inject constructor(
      */
     suspend fun getOpenOrderByTable(tableNumber: Int): Order? {
         return try {
+            Log.d("OrderRepository", "getOpenOrderByTable: Checking for open order on table $tableNumber")
+            // Convert Int to Long for Firestore query (Firestore stores integers as Long)
             val snapshot = ordersCollection
-                .whereEqualTo("tableNumber", tableNumber)
+                .whereEqualTo("tableNumber", tableNumber.toLong())
                 .get()
                 .await()
             
-            snapshot.documents
-                .mapNotNull { it.toOrder() }
-                .firstOrNull { it.isOpen() }
+            Log.d("OrderRepository", "getOpenOrderByTable: Found ${snapshot.documents.size} orders for table $tableNumber")
+            
+            val orders = snapshot.documents.mapNotNull { doc ->
+                try {
+                    val order = doc.toOrder()
+                    Log.d("OrderRepository", "getOpenOrderByTable: Order ${doc.id} - status=${order?.status}, isOpen=${order?.isOpen()}")
+                    order
+                } catch (e: Exception) {
+                    Log.e("OrderRepository", "getOpenOrderByTable: Failed to convert document ${doc.id}", e)
+                    null
+                }
+            }
+            
+            val openOrder = orders.firstOrNull { it.isOpen() }
+            if (openOrder != null) {
+                Log.d("OrderRepository", "getOpenOrderByTable: Found open order - id='${openOrder.id}', status=${openOrder.status}")
+            } else {
+                Log.d("OrderRepository", "getOpenOrderByTable: No open order found for table $tableNumber")
+            }
+            
+            openOrder
         } catch (e: Exception) {
+            Log.e("OrderRepository", "getOpenOrderByTable: Exception while checking for open order", e)
             null
         }
     }
     
     /**
-     * Create a new order.
+     * Create a new order in Firestore.
+     * 
+     * VALIDATION:
+     * - Order must have items (validated before calling this method)
+     * - Order must have valid table number
+     * 
+     * @param order The order to create
+     * @return Result containing the Firestore document ID on success
      */
     suspend fun createOrder(order: Order): Result<String> {
         return try {
-            val docRef = ordersCollection.add(order.toMap()).await()
-            Result.success(docRef.id)
+            // Validate order has items
+            if (order.items.isEmpty()) {
+                Log.e("OrderRepository", "createOrder: Order has no items")
+                return Result.failure(
+                    IllegalArgumentException("Cannot create order with no items")
+                )
+            }
+            
+            // Validate table number
+            if (order.tableNumber <= 0) {
+                Log.e("OrderRepository", "createOrder: Invalid table number: ${order.tableNumber}")
+                return Result.failure(
+                    IllegalArgumentException("Table number must be greater than 0")
+                )
+            }
+            
+            Log.d("OrderRepository", "createOrder: Creating order - table=${order.tableNumber}, items=${order.items.size}, total=${order.totalPrice}, status=${order.status}, userId='${order.userId}'")
+            
+            // Log order items details
+            order.items.forEachIndexed { index, item ->
+                Log.d("OrderRepository", "createOrder: Item $index - menuItemId='${item.menuItemId}', name='${item.menuItemName}', price=${item.price}, quantity=${item.quantity}")
+            }
+            
+            // Convert order to Firestore map
+            val orderMap = order.toMap()
+            
+            Log.d("OrderRepository", "createOrder: ========================================")
+            Log.d("OrderRepository", "createOrder: ORDER DATA STRUCTURE:")
+            Log.d("OrderRepository", "createOrder: ========================================")
+            Log.d("OrderRepository", "createOrder: Order map keys: ${orderMap.keys}")
+            Log.d("OrderRepository", "createOrder: tableNumber: ${orderMap["tableNumber"]} (type: ${orderMap["tableNumber"]?.javaClass?.simpleName})")
+            Log.d("OrderRepository", "createOrder: totalPrice: ${orderMap["totalPrice"]} (type: ${orderMap["totalPrice"]?.javaClass?.simpleName})")
+            Log.d("OrderRepository", "createOrder: status: ${orderMap["status"]} (type: ${orderMap["status"]?.javaClass?.simpleName})")
+            Log.d("OrderRepository", "createOrder: userId: ${orderMap["userId"]} (type: ${orderMap["userId"]?.javaClass?.simpleName})")
+            Log.d("OrderRepository", "createOrder: createdAt: ${orderMap["createdAt"]} (type: ${orderMap["createdAt"]?.javaClass?.simpleName})")
+            
+            val itemsList = orderMap["items"] as? List<*>
+            Log.d("OrderRepository", "createOrder: items count: ${itemsList?.size}")
+            
+            itemsList?.forEachIndexed { index, item ->
+                val itemMap = item as? Map<*, *>
+                Log.d("OrderRepository", "createOrder:   Item $index:")
+                Log.d("OrderRepository", "createOrder:     menuItemId: ${itemMap?.get("menuItemId")} (type: ${itemMap?.get("menuItemId")?.javaClass?.simpleName})")
+                Log.d("OrderRepository", "createOrder:     menuItemName: ${itemMap?.get("menuItemName")} (type: ${itemMap?.get("menuItemName")?.javaClass?.simpleName})")
+                Log.d("OrderRepository", "createOrder:     price: ${itemMap?.get("price")} (type: ${itemMap?.get("price")?.javaClass?.simpleName})")
+                Log.d("OrderRepository", "createOrder:     quantity: ${itemMap?.get("quantity")} (type: ${itemMap?.get("quantity")?.javaClass?.simpleName})")
+            }
+            
+            Log.d("OrderRepository", "createOrder: Full order map: $orderMap")
+            Log.d("OrderRepository", "createOrder: ========================================")
+            
+            // Verify collection name
+            Log.d("OrderRepository", "createOrder: Using collection: ${FirestoreCollections.ORDERS}")
+            
+            // Add order to Firestore orders collection
+            Log.d("OrderRepository", "createOrder: Calling ordersCollection.add()...")
+            Log.d("OrderRepository", "createOrder: Collection path: ${ordersCollection.path}")
+            
+            try {
+                val docRef = ordersCollection.add(orderMap).await()
+                
+                Log.i("OrderRepository", "createOrder: ✓ Order created successfully in Firestore!")
+                Log.i("OrderRepository", "createOrder: Document ID: ${docRef.id}")
+                Log.i("OrderRepository", "createOrder: Collection: ${FirestoreCollections.ORDERS}")
+                Log.i("OrderRepository", "createOrder: Full path: ${docRef.path}")
+                Log.i("OrderRepository", "createOrder: Table: ${order.tableNumber}, Total: ${order.totalPrice}")
+                
+                // Verify the document was created by reading it back
+                val verifyDoc = docRef.get().await()
+                if (verifyDoc.exists()) {
+                    Log.i("OrderRepository", "createOrder: ✓ Verified: Document exists in Firestore")
+                } else {
+                    Log.e("OrderRepository", "createOrder: ✗ WARNING: Document does not exist after creation!")
+                }
+                
+                // Return the document ID
+                Result.success(docRef.id)
+            } catch (firestoreException: com.google.firebase.firestore.FirebaseFirestoreException) {
+                Log.e("OrderRepository", "createOrder: ✗ FirestoreException", firestoreException)
+                Log.e("OrderRepository", "createOrder: Error code: ${firestoreException.code}")
+                Log.e("OrderRepository", "createOrder: Error message: ${firestoreException.message}")
+                if (firestoreException.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    Log.e("OrderRepository", "createOrder: PERMISSION_DENIED - Check Firestore security rules for 'orders' collection")
+                }
+                Result.failure(firestoreException)
+            }
         } catch (e: Exception) {
+            Log.e("OrderRepository", "createOrder: ✗ ERROR creating order in Firestore", e)
+            Log.e("OrderRepository", "createOrder: Exception type: ${e.javaClass.simpleName}")
+            Log.e("OrderRepository", "createOrder: Exception message: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }
@@ -120,12 +237,26 @@ class OrderRepository @Inject constructor(
      */
     suspend fun updateOrder(order: Order): Result<Unit> {
         return try {
+            Log.d("OrderRepository", "updateOrder: Called - orderId='${order.id}', table=${order.tableNumber}, items=${order.items.size}, total=${order.totalPrice}")
+            
             if (order.id.isEmpty()) {
+                Log.e("OrderRepository", "updateOrder: Order ID is empty")
                 return Result.failure(IllegalArgumentException("Order ID cannot be empty"))
             }
-            ordersCollection.document(order.id).set(order.toMap()).await()
+            
+            val orderMap = order.toMap()
+            Log.d("OrderRepository", "updateOrder: Order map keys: ${orderMap.keys}")
+            Log.d("OrderRepository", "updateOrder: Calling ordersCollection.document('${order.id}').set()...")
+            
+            ordersCollection.document(order.id).set(orderMap).await()
+            
+            Log.i("OrderRepository", "updateOrder: ✓ Order updated successfully in Firestore - id='${order.id}'")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("OrderRepository", "updateOrder: ✗ ERROR updating order", e)
+            Log.e("OrderRepository", "updateOrder: Exception type: ${e.javaClass.simpleName}")
+            Log.e("OrderRepository", "updateOrder: Exception message: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }
@@ -148,7 +279,8 @@ class OrderRepository @Inject constructor(
 // Extension functions for Firestore conversion
 private fun Order.toMap(): Map<String, Any> {
     return mapOf(
-        "tableNumber" to tableNumber,
+        // Convert Int to Long for Firestore (Firestore stores integers as Long/Number)
+        "tableNumber" to tableNumber.toLong(),
         "items" to items.map { it.toMap() },
         "totalPrice" to totalPrice,
         "status" to status.name,
@@ -161,8 +293,9 @@ private fun com.example.snaporder.core.model.OrderItem.toMap(): Map<String, Any>
     return mapOf(
         "menuItemId" to menuItemId,
         "menuItemName" to menuItemName,
-        "price" to price,
-        "quantity" to quantity
+        "price" to price, // Double is fine for Firestore
+        // Convert Int to Long for Firestore (Firestore stores integers as Long/Number)
+        "quantity" to quantity.toLong()
     )
 }
 
