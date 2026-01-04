@@ -68,6 +68,7 @@ fun OrderDetailScreen(
     val statusChangeResult by viewModel.statusChangeResult.collectAsState()
     val addMoreItemsDialogState by viewModel.addMoreItemsDialogState.collectAsState()
     val dialogCartItems by viewModel.dialogCartItems.collectAsState()
+    val statusChangeConfirmationState by viewModel.statusChangeConfirmationState.collectAsState()
     
     // Load order when screen is opened
     LaunchedEffect(orderId) {
@@ -126,19 +127,43 @@ fun OrderDetailScreen(
                     )
                 }
                 uiState.order != null -> {
+                    val currentOrder = uiState.order!!
+                    val isStatusChangeEnabled = currentOrder.status != OrderStatus.PAID && currentOrder.status != OrderStatus.CANCELLED
+                    
                     OrderDetailContent(
-                        order = uiState.order!!,
-                        subtotal = viewModel.calculateSubtotal(uiState.order!!),
-                        serviceFee = viewModel.getServiceFee(uiState.order!!),
-                        totalPrice = uiState.order!!.totalPrice.toInt(),
+                        order = currentOrder,
+                        subtotal = viewModel.calculateSubtotal(currentOrder),
+                        serviceFee = viewModel.getServiceFee(currentOrder),
+                        totalPrice = currentOrder.totalPrice.toInt(),
                         onAddMoreItemsClick = {
-                            viewModel.openAddMoreItemsDialog(uiState.order!!)
+                            viewModel.openAddMoreItemsDialog(currentOrder)
                         },
                         onStatusChange = { newStatus ->
-                            viewModel.changeOrderStatus(orderId, newStatus)
-                        }
+                            // Show confirmation dialog for PAID or CANCELLED
+                            if (newStatus == OrderStatus.PAID || newStatus == OrderStatus.CANCELLED) {
+                                viewModel.showStatusChangeConfirmation(newStatus)
+                            } else {
+                                viewModel.changeOrderStatus(orderId, newStatus)
+                            }
+                        },
+                        isStatusChangeEnabled = isStatusChangeEnabled
                     )
                 }
+            }
+            
+            // Status Change Confirmation Dialog
+            statusChangeConfirmationState?.let { confirmationState ->
+                StatusChangeConfirmationDialog(
+                    currentStatus = confirmationState.currentStatus,
+                    newStatus = confirmationState.newStatus,
+                    onConfirm = {
+                        viewModel.changeOrderStatus(orderId, confirmationState.newStatus)
+                        viewModel.clearStatusChangeConfirmation()
+                    },
+                    onDismiss = {
+                        viewModel.clearStatusChangeConfirmation()
+                    }
+                )
             }
             
             // Add More Items Dialog
@@ -215,7 +240,8 @@ private fun OrderDetailContent(
     serviceFee: Int,
     totalPrice: Int,
     onAddMoreItemsClick: () -> Unit,
-    onStatusChange: (OrderStatus) -> Unit
+    onStatusChange: (OrderStatus) -> Unit,
+    isStatusChangeEnabled: Boolean = true
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -226,7 +252,8 @@ private fun OrderDetailContent(
         item {
             OrderInfoCard(
                 order = order,
-                onStatusChange = onStatusChange
+                onStatusChange = onStatusChange,
+                isStatusChangeEnabled = isStatusChangeEnabled
             )
         }
         
@@ -295,7 +322,8 @@ private fun OrderDetailContent(
 @Composable
 private fun OrderInfoCard(
     order: Order,
-    onStatusChange: (OrderStatus) -> Unit
+    onStatusChange: (OrderStatus) -> Unit,
+    isStatusChangeEnabled: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -345,7 +373,8 @@ private fun OrderInfoCard(
                 )
                 OrderStatusSelector(
                     currentStatus = order.status,
-                    onStatusChange = onStatusChange
+                    onStatusChange = onStatusChange,
+                    enabled = isStatusChangeEnabled
                 )
             }
             
@@ -399,7 +428,8 @@ private fun OrderInfoCard(
 @Composable
 private fun OrderStatusSelector(
     currentStatus: OrderStatus,
-    onStatusChange: (OrderStatus) -> Unit
+    onStatusChange: (OrderStatus) -> Unit,
+    enabled: Boolean = true
 ) {
     var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     
@@ -413,10 +443,14 @@ private fun OrderStatusSelector(
     Box {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = statusColor.copy(alpha = 0.1f),
+            color = statusColor.copy(alpha = if (enabled) 0.1f else 0.05f),
             modifier = Modifier
                 .padding(vertical = 4.dp)
-                .clickable { expanded = true }
+                .clickable(enabled = enabled) { 
+                    if (enabled) {
+                        expanded = true
+                    }
+                }
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -428,18 +462,20 @@ private fun OrderStatusSelector(
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
-                    color = statusColor
+                    color = if (enabled) statusColor else statusColor.copy(alpha = 0.6f)
                 )
-                Text(
-                    text = "▼",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statusColor
-                )
+                if (enabled) {
+                    Text(
+                        text = "▼",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = statusColor
+                    )
+                }
             }
         }
         
         DropdownMenu(
-            expanded = expanded,
+            expanded = expanded && enabled,
             onDismissRequest = { expanded = false }
         ) {
             OrderStatus.values().forEach { status ->
@@ -626,6 +662,79 @@ private fun formatCreatedTime(timestamp: com.google.firebase.Timestamp?): String
     val orderTime = Date(timestamp.seconds * 1000)
     val dateFormat = SimpleDateFormat("MMM dd, yyyy 'at' HH:mm", Locale.getDefault())
     return dateFormat.format(orderTime)
+}
+
+/**
+ * Status Change Confirmation Dialog - Confirms status changes to PAID or CANCELLED.
+ */
+@Composable
+private fun StatusChangeConfirmationDialog(
+    currentStatus: OrderStatus,
+    newStatus: OrderStatus,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val title = when (newStatus) {
+        OrderStatus.PAID -> "Mark Order as Paid"
+        OrderStatus.CANCELLED -> "Cancel Order"
+        else -> "Change Order Status"
+    }
+    
+    val message = when (newStatus) {
+        OrderStatus.PAID -> "Are you sure you want to mark this order as PAID? This action cannot be undone and the order cannot be modified afterward."
+        OrderStatus.CANCELLED -> "Are you sure you want to cancel this order? This action cannot be undone and the order cannot be modified afterward."
+        else -> "Are you sure you want to change the order status?"
+    }
+    
+    val confirmButtonText = when (newStatus) {
+        OrderStatus.PAID -> "Mark as Paid"
+        OrderStatus.CANCELLED -> "Cancel Order"
+        else -> "Confirm"
+    }
+    
+    val confirmButtonColor = when (newStatus) {
+        OrderStatus.PAID -> SnapOrdersColors.Primary
+        OrderStatus.CANCELLED -> MaterialTheme.colorScheme.error
+        else -> SnapOrdersColors.TextPrimary
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = confirmButtonColor
+                )
+            ) {
+                Text(
+                    text = confirmButtonText,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        containerColor = SnapOrdersColors.Background
+    )
 }
 
 /**

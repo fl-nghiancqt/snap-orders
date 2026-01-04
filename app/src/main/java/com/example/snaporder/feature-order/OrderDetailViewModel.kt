@@ -42,6 +42,10 @@ class OrderDetailViewModel @Inject constructor(
     private val _statusChangeResult = MutableStateFlow<StatusChangeResult?>(null)
     val statusChangeResult: StateFlow<StatusChangeResult?> = _statusChangeResult.asStateFlow()
     
+    // State for status change confirmation dialog
+    private val _statusChangeConfirmationState = MutableStateFlow<StatusChangeConfirmationState?>(null)
+    val statusChangeConfirmationState: StateFlow<StatusChangeConfirmationState?> = _statusChangeConfirmationState.asStateFlow()
+    
     // State for add more items dialog
     private val _addMoreItemsDialogState = MutableStateFlow<AddMoreItemsDialogState?>(null)
     val addMoreItemsDialogState: StateFlow<AddMoreItemsDialogState?> = _addMoreItemsDialogState.asStateFlow()
@@ -270,6 +274,26 @@ class OrderDetailViewModel @Inject constructor(
     }
     
     /**
+     * Show confirmation dialog for status change to PAID or CANCELLED.
+     */
+    fun showStatusChangeConfirmation(newStatus: OrderStatus) {
+        val currentOrder = currentState.order
+        if (currentOrder != null) {
+            _statusChangeConfirmationState.value = StatusChangeConfirmationState(
+                currentStatus = currentOrder.status,
+                newStatus = newStatus
+            )
+        }
+    }
+    
+    /**
+     * Clear the status change confirmation state.
+     */
+    fun clearStatusChangeConfirmation() {
+        _statusChangeConfirmationState.value = null
+    }
+    
+    /**
      * Open the add more items dialog.
      * Loads menu items and prepares the dialog state.
      */
@@ -483,6 +507,14 @@ data class UpdatedBilling(
     val subtotal: Double,
     val serviceFee: Double,
     val total: Double
+)
+
+/**
+ * State for status change confirmation dialog.
+ */
+data class StatusChangeConfirmationState(
+    val currentStatus: OrderStatus,
+    val newStatus: OrderStatus
 )
 
 /**
