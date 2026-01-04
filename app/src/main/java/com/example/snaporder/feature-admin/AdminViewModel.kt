@@ -2,8 +2,11 @@ package com.example.snaporder.feature.admin
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.example.snaporder.core.firestore.MenuRepository
 import com.example.snaporder.core.firestore.OrderRepository
+import com.example.snaporder.core.model.MenuItem
 import com.example.snaporder.core.model.Order
+import com.example.snaporder.core.model.OrderStatus
 import com.example.snaporder.core.viewmodel.BaseViewModel
 import com.google.firebase.Timestamp
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,12 +22,15 @@ import javax.inject.Inject
  * 
  * ARCHITECTURE:
  * - Uses OrderRepository to fetch orders
+ * - Uses MenuRepository to get menu item names
  * - Calculates today's statistics (orders count, revenue)
+ * - Supports custom date range reports
  * - Manages UI state via StateFlow
  */
 @HiltViewModel
 class AdminViewModel @Inject constructor(
-    private val orderRepository: OrderRepository
+    private val orderRepository: OrderRepository,
+    private val menuRepository: MenuRepository
 ) : BaseViewModel<AdminUiState>() {
     
     override fun createInitialState(): AdminUiState {
@@ -150,7 +156,147 @@ class AdminViewModel @Inject constructor(
             }
         }
     }
+    
+    /**
+     * Load custom date range report.
+     */
+    fun loadCustomDateRangeReport(startDate: Calendar, endDate: Calendar) {
+        viewModelScope.launch {
+            updateState { copy(isCustomReportLoading = true, customReportError = null) }
+            
+            try {
+                // Set start date to beginning of day
+                val startCal = startDate.clone() as Calendar
+                startCal.set(Calendar.HOUR_OF_DAY, 0)
+                startCal.set(Calendar.MINUTE, 0)
+                startCal.set(Calendar.SECOND, 0)
+                startCal.set(Calendar.MILLISECOND, 0)
+                val startTimestamp = Timestamp(startCal.timeInMillis / 1000, 0)
+                
+                // Set end date to end of day
+                val endCal = endDate.clone() as Calendar
+                endCal.set(Calendar.HOUR_OF_DAY, 23)
+                endCal.set(Calendar.MINUTE, 59)
+                endCal.set(Calendar.SECOND, 59)
+                endCal.set(Calendar.MILLISECOND, 999)
+                val endTimestamp = Timestamp(endCal.timeInMillis / 1000, 0)
+                
+                Log.d("AdminViewModel", "loadCustomDateRangeReport: Loading orders from ${startTimestamp.seconds} to ${endTimestamp.seconds}")
+                
+                // Get all orders and filter by date range
+                orderRepository.getAllOrders()
+                    .onEach { allOrders ->
+                        // Filter orders by date range
+                        val dateRangeOrders = allOrders.filter { order ->
+                            val orderTime = order.createdAt
+                            if (orderTime != null) {
+                                val orderSeconds = orderTime.seconds
+                                orderSeconds >= startTimestamp.seconds && orderSeconds <= endTimestamp.seconds
+                            } else {
+                                false
+                            }
+                        }
+                        
+                        // Calculate order statistics by status
+                        val statusStats = OrderStatus.values().associateWith { status ->
+                            dateRangeOrders.count { it.status == status }
+                        }
+                        
+                        // Calculate total revenue (only PAID orders)
+                        val paidOrders = dateRangeOrders.filter { it.status == OrderStatus.PAID }
+                        val totalRevenue = paidOrders.sumOf { it.totalPrice }
+                        val totalOrders = dateRangeOrders.size
+                        
+                        // Calculate popular menu items
+                        val menuItemCounts = mutableMapOf<String, Int>()
+                        dateRangeOrders.forEach { order ->
+                            order.items.forEach { item ->
+                                menuItemCounts[item.menuItemId] = 
+                                    menuItemCounts.getOrDefault(item.menuItemId, 0) + item.quantity
+                            }
+                        }
+                        
+                        // Get menu item names
+                        val menuItems = menuRepository.getAllMenus()
+                        val popularItems = menuItemCounts.entries
+                            .sortedByDescending { it.value }
+                            .take(10)
+                            .mapNotNull { (menuItemId, count) ->
+                                val menuItem = menuItems.find { it.id == menuItemId }
+                                if (menuItem != null) {
+                                    PopularMenuItem(menuItem.name, count)
+                                } else {
+                                    null
+                                }
+                            }
+                        
+                        // Calculate daily revenue for trends
+                        val dailyRevenueMap = mutableMapOf<String, Double>()
+                        paidOrders.forEach { order ->
+                            val orderTime = order.createdAt
+                            if (orderTime != null) {
+                                val calendar = Calendar.getInstance()
+                                calendar.timeInMillis = orderTime.seconds * 1000L
+                                val dateKey = "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.MONTH) + 1}-${calendar.get(Calendar.DAY_OF_MONTH)}"
+                                dailyRevenueMap[dateKey] = dailyRevenueMap.getOrDefault(dateKey, 0.0) + order.totalPrice
+                            }
+                        }
+                        val dailyRevenue = dailyRevenueMap.entries
+                            .sortedBy { it.key }
+                            .map { DailyRevenue(it.key, it.value) }
+                        
+                        Log.d("AdminViewModel", "loadCustomDateRangeReport: Found ${dateRangeOrders.size} orders, Revenue=$totalRevenue")
+                        
+                        updateState {
+                            copy(
+                                isCustomReportLoading = false,
+                                customDateRangeOrders = totalOrders,
+                                customDateRangeRevenue = totalRevenue,
+                                orderStatisticsByStatus = statusStats,
+                                popularMenuItems = popularItems,
+                                dailyRevenueTrends = dailyRevenue,
+                                customReportError = null
+                            )
+                        }
+                    }
+                    .catch { error ->
+                        Log.e("AdminViewModel", "loadCustomDateRangeReport: Error loading orders", error)
+                        updateState {
+                            copy(
+                                isCustomReportLoading = false,
+                                customReportError = "Failed to load report: ${error.message}"
+                            )
+                        }
+                    }
+                    .launchIn(viewModelScope)
+            } catch (e: Exception) {
+                Log.e("AdminViewModel", "loadCustomDateRangeReport: Exception", e)
+                updateState {
+                    copy(
+                        isCustomReportLoading = false,
+                        customReportError = "Failed to load report: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
 }
+
+/**
+ * Data class for popular menu items.
+ */
+data class PopularMenuItem(
+    val name: String,
+    val orderCount: Int
+)
+
+/**
+ * Data class for daily revenue.
+ */
+data class DailyRevenue(
+    val date: String,
+    val revenue: Double
+)
 
 /**
  * Admin UI State.
@@ -161,6 +307,14 @@ data class AdminUiState(
     val todayRevenue: Double = 0.0,
     val monthOrdersCount: Int = 0,
     val monthRevenue: Double = 0.0,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Custom date range report
+    val isCustomReportLoading: Boolean = false,
+    val customDateRangeOrders: Int = 0,
+    val customDateRangeRevenue: Double = 0.0,
+    val orderStatisticsByStatus: Map<OrderStatus, Int> = emptyMap(),
+    val popularMenuItems: List<PopularMenuItem> = emptyList(),
+    val dailyRevenueTrends: List<DailyRevenue> = emptyList(),
+    val customReportError: String? = null
 )
 
